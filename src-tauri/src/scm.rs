@@ -134,13 +134,7 @@ pub fn import_p4_pending(
     let mut opened_files = parse_p4_opened(&opened);
     let client = opened_files.iter().find_map(|file| file.client.clone());
     populate_p4_local_paths(&mut opened_files, cwd, client.as_deref())?;
-    let mut args: Vec<String> = vec!["diff".to_string(), "-du".to_string()];
-    args.extend(opened_files.iter().map(|file| file.depot_path.clone()));
-    let diff = if opened_files.is_empty() {
-        String::new()
-    } else {
-        run_p4_owned(&args, cwd, client.as_deref())?
-    };
+    let diff = collect_pending_p4_diff(&opened_files, cwd, client.as_deref())?;
     let title = if change == "default" {
         "P4 default pending changelist".to_string()
     } else {
@@ -310,13 +304,7 @@ fn replace_p4_pending(
     let mut opened_files = parse_p4_opened(&opened);
     let client = opened_files.iter().find_map(|file| file.client.clone());
     populate_p4_local_paths(&mut opened_files, cwd, client.as_deref())?;
-    let mut args: Vec<String> = vec!["diff".to_string(), "-du".to_string()];
-    args.extend(opened_files.iter().map(|file| file.depot_path.clone()));
-    let diff = if opened_files.is_empty() {
-        String::new()
-    } else {
-        run_p4_owned(&args, cwd, client.as_deref())?
-    };
+    let diff = collect_pending_p4_diff(&opened_files, cwd, client.as_deref())?;
     let title = if change == "default" {
         "P4 default pending changelist".to_string()
     } else {
@@ -677,24 +665,43 @@ fn resolve_p4_local_paths(
     cwd: Option<&str>,
     client: Option<&str>,
 ) -> Result<HashMap<String, String>, String> {
-    let mut args = vec!["where".to_string()];
-    args.extend(depot_paths.iter().cloned());
-    let output = run_p4_owned(&args, cwd, client)?;
     let mut mapping = HashMap::new();
+    for chunk in depot_paths.chunks(32) {
+        let mut args = vec!["where".to_string()];
+        args.extend(chunk.iter().cloned());
+        let output = run_p4_owned(&args, cwd, client)?;
 
-    for line in output.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('-') {
-            continue;
-        }
+        for line in output.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('-') {
+                continue;
+            }
 
-        let parts = trimmed.split_whitespace().collect::<Vec<_>>();
-        if parts.len() >= 3 && parts[0].starts_with("//") {
-            mapping.insert(parts[0].to_string(), parts[2].to_string());
+            let parts = trimmed.split_whitespace().collect::<Vec<_>>();
+            if parts.len() >= 3 && parts[0].starts_with("//") {
+                mapping.insert(parts[0].to_string(), parts[2].to_string());
+            }
         }
     }
 
     Ok(mapping)
+}
+
+fn collect_pending_p4_diff(
+    opened_files: &[P4OpenedFile],
+    cwd: Option<&str>,
+    client: Option<&str>,
+) -> Result<String, String> {
+    let mut sections = Vec::new();
+    for chunk in opened_files.chunks(24) {
+        let mut args = vec!["diff".to_string(), "-du".to_string()];
+        args.extend(chunk.iter().map(|file| file.depot_path.clone()));
+        let output = run_p4_owned(&args, cwd, client)?;
+        if !output.trim().is_empty() {
+            sections.push(output);
+        }
+    }
+    Ok(sections.join("\n"))
 }
 
 fn git_show_file(repo_path: &str, rel_path: &str) -> Result<String, String> {

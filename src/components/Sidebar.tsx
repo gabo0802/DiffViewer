@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import * as api from "../api";
+import FormDialog, { type FormDialogField } from "./FormDialog";
 import type { Workspace, DiffSet, FileDiff } from "../types";
 
 interface Props {
@@ -25,6 +26,9 @@ export default function Sidebar({ onSelectFileDiff }: Props) {
   const [filediffs, setFilediffs] = useState<Record<string, FileDiff[]>>({});
   const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingImportKind, setPendingImportKind] = useState<
+    "p4Pending" | "p4Shelved" | "p4Submitted" | null
+  >(null);
 
   const loadDiffsets = useCallback(async (ws: Workspace, refreshLive = false) => {
     const next = refreshLive
@@ -75,6 +79,10 @@ export default function Sidebar({ onSelectFileDiff }: Props) {
 
   const runImport = async (kind: "gitWorking" | "gitCommit" | "p4Pending" | "p4Shelved" | "p4Submitted") => {
     setError(null);
+    if (kind === "p4Pending" || kind === "p4Shelved" || kind === "p4Submitted") {
+      setPendingImportKind(kind);
+      return;
+    }
     try {
       setIsImporting(true);
       let diffsetId: string | null = null;
@@ -88,16 +96,6 @@ export default function Sidebar({ onSelectFileDiff }: Props) {
         const rev = window.prompt("Git commit or revision:", "HEAD");
         if (!rev) return;
         diffsetId = await api.importGitCommit(repoPath, rev);
-      } else {
-        const change = window.prompt(
-          kind === "p4Pending" ? "P4 changelist number, or default:" : "P4 changelist number:",
-          kind === "p4Pending" ? "default" : ""
-        );
-        if (!change) return;
-        const cwd = window.prompt("P4 workspace directory (blank uses current environment):", "") ?? undefined;
-        if (kind === "p4Pending") diffsetId = await api.importP4Pending(change, cwd || undefined);
-        if (kind === "p4Shelved") diffsetId = await api.importP4Shelved(change, cwd || undefined);
-        if (kind === "p4Submitted") diffsetId = await api.importP4Submitted(change, cwd || undefined);
       }
       if (workspace) await loadDiffsets(workspace);
       if (diffsetId) {
@@ -105,6 +103,35 @@ export default function Sidebar({ onSelectFileDiff }: Props) {
         const fds = await api.listFilediffs(diffsetId);
         setFilediffs((prev) => ({ ...prev, [diffsetId!]: fds }));
       }
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const submitP4Import = async (values: Record<string, string>) => {
+    if (!pendingImportKind) return;
+    setError(null);
+    try {
+      setIsImporting(true);
+      const change = values.change.trim();
+      const cwd = values.cwd.trim() || undefined;
+      let diffsetId: string | null = null;
+      if (pendingImportKind === "p4Pending") {
+        diffsetId = await api.importP4Pending(change, cwd);
+      } else if (pendingImportKind === "p4Shelved") {
+        diffsetId = await api.importP4Shelved(change, cwd);
+      } else {
+        diffsetId = await api.importP4Submitted(change, cwd);
+      }
+      if (workspace) await loadDiffsets(workspace);
+      if (diffsetId) {
+        setExpanded(diffsetId);
+        const fds = await api.listFilediffs(diffsetId);
+        setFilediffs((prev) => ({ ...prev, [diffsetId]: fds }));
+      }
+      setPendingImportKind(null);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -192,8 +219,42 @@ export default function Sidebar({ onSelectFileDiff }: Props) {
           ))}
         </section>
       ))}
+      <FormDialog
+        visible={pendingImportKind !== null}
+        title={dialogTitle(pendingImportKind)}
+        description="Enter the changelist number and optional workspace path."
+        confirmLabel="Open"
+        onCancel={() => setPendingImportKind(null)}
+        onConfirm={submitP4Import}
+        fields={p4DialogFields(pendingImportKind)}
+      />
     </aside>
   );
+}
+
+function dialogTitle(kind: "p4Pending" | "p4Shelved" | "p4Submitted" | null) {
+  if (kind === "p4Pending") return "Open P4 Pending Changelist";
+  if (kind === "p4Shelved") return "Open P4 Shelved Changelist";
+  if (kind === "p4Submitted") return "Open P4 Submitted Changelist";
+  return "";
+}
+
+function p4DialogFields(kind: "p4Pending" | "p4Shelved" | "p4Submitted" | null): FormDialogField[] {
+  return [
+    {
+      id: "change",
+      label: "Changelist",
+      defaultValue: kind === "p4Pending" ? "default" : "",
+      placeholder: kind === "p4Pending" ? "default or 12345" : "12345",
+      required: true,
+    },
+    {
+      id: "cwd",
+      label: "Workspace",
+      defaultValue: "",
+      placeholder: "Optional workspace path",
+    },
+  ];
 }
 
 function DiffSetRow({
