@@ -17,10 +17,21 @@ export default function App() {
   };
 
   const closeTab = (id: string) => {
-    setTabs((prev) => prev.filter((t) => t.filediff_id !== id));
-    if (activeTab === id) {
-      setActiveTab(tabs.length > 1 ? tabs[tabs.length - 2]?.filediff_id ?? null : null);
-    }
+    setTabs((prev) => {
+      const closedIndex = prev.findIndex((t) => t.filediff_id === id);
+      const nextTabs = prev.filter((t) => t.filediff_id !== id);
+
+      if (activeTab === id) {
+        const fallbackTab =
+          nextTabs[closedIndex] ?? nextTabs[Math.max(0, closedIndex - 1)] ?? null;
+        setActiveTab(fallbackTab?.filediff_id ?? null);
+        if (!fallbackTab) {
+          setMergeVisible(false);
+        }
+      }
+
+      return nextTabs;
+    });
   };
 
   const currentFd = tabs.find((t) => t.filediff_id === activeTab) ?? null;
@@ -30,7 +41,6 @@ export default function App() {
       <Sidebar onSelectFileDiff={openFileDiff} />
 
       <main className="main">
-        {/* Tab bar */}
         <div className="tab-bar">
           {tabs.map((fd) => (
             <div
@@ -40,21 +50,23 @@ export default function App() {
             >
               <span className="tab-label">{fd.display_path}</span>
               <button
+                type="button"
                 className="tab-close"
+                title={`Close ${fd.display_path}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   closeTab(fd.filediff_id);
                 }}
               >
-                ×
+                x
               </button>
             </div>
           ))}
 
-          {/* Toolbar actions */}
           <div className="toolbar-actions">
             {currentFd && (
               <button
+                type="button"
                 className="btn-merge-toggle"
                 onClick={() => setMergeVisible((v) => !v)}
               >
@@ -64,25 +76,25 @@ export default function App() {
           </div>
         </div>
 
-        {/* Diff viewer */}
-        <div className="editor-area">
-          {currentFd ? (
-            <DiffViewer fileDiff={currentFd} />
-          ) : (
-            <div className="empty-state">
-              Open a diff from the sidebar, or import a patch file.
-            </div>
+        <div className={`workspace-shell ${mergeVisible && currentFd ? "workspace-shell-merge" : ""}`}>
+          <div className="editor-area">
+            {currentFd ? (
+              <DiffViewer fileDiff={currentFd} />
+            ) : (
+              <div className="empty-state">
+                Open a diff from the sidebar, or import a patch file.
+              </div>
+            )}
+          </div>
+
+          {currentFd && (
+            <MergePanel
+              fileDiff={currentFd}
+              visible={mergeVisible}
+              onToggle={() => setMergeVisible(false)}
+            />
           )}
         </div>
-
-        {/* Merge panel */}
-        {currentFd && (
-          <MergePanel
-            fileDiff={currentFd}
-            visible={mergeVisible}
-            onToggle={() => setMergeVisible(false)}
-          />
-        )}
       </main>
     </div>
   );

@@ -14,6 +14,7 @@ export default function MergePanel({ fileDiff, visible, onToggle }: Props) {
   const [mergedText, setMergedText] = useState("");
   const [height, setHeight] = useState(320);
   const [isResizing, setIsResizing] = useState(false);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const startYRef = useRef(0);
   const startHeightRef = useRef(320);
 
@@ -59,12 +60,17 @@ export default function MergePanel({ fileDiff, visible, onToggle }: Props) {
 
   useEffect(() => {
     if (!isResizing) return;
+
     const onMove = (e: MouseEvent) => {
       const delta = startYRef.current - e.clientY;
-      const next = Math.max(180, Math.min(700, startHeightRef.current + delta));
+      const parentHeight = panelRef.current?.parentElement?.clientHeight ?? window.innerHeight;
+      const maxHeight = Math.max(220, parentHeight - 180);
+      const next = Math.max(180, Math.min(maxHeight, startHeightRef.current + delta));
       setHeight(next);
     };
+
     const onUp = () => setIsResizing(false);
+
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     return () => {
@@ -82,27 +88,29 @@ export default function MergePanel({ fileDiff, visible, onToggle }: Props) {
   if (!visible) return null;
 
   return (
-    <div className="merge-panel" style={{ height }}>
+    <div ref={panelRef} className="merge-panel" style={{ height }}>
       <div className="merge-resizer" onMouseDown={beginResize} title="Drag to resize" />
       <div className="merge-toolbar">
         <span className="merge-title">Merged Output</span>
-        <span className="merge-dirty">{buffer?.dirty ? "● unsaved" : ""}</span>
-        <button onClick={handleSave}>Save</button>
-        <button onClick={handleSaveAs}>Save As</button>
-        <button onClick={onToggle}>Close</button>
+        <span className="merge-dirty">{buffer?.dirty ? "* unsaved" : ""}</span>
+        <button type="button" onClick={handleSave}>Save</button>
+        <button type="button" onClick={handleSaveAs}>Save As</button>
+        <button type="button" onClick={onToggle}>Close</button>
       </div>
-      <Editor
-        height="100%"
-        defaultLanguage="text"
-        value={mergedText}
-        onChange={(value) => setMergedText(value ?? "")}
-        options={{
-          minimap: { enabled: false },
-          scrollBeyondLastLine: false,
-          inlineSuggest: { enabled: true },
-          suggest: { preview: true },
-        }}
-      />
+      <div className="merge-editor-wrap">
+        <Editor
+          height="100%"
+          defaultLanguage="text"
+          value={mergedText}
+          onChange={(value) => setMergedText(value ?? "")}
+          options={{
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            inlineSuggest: { enabled: true },
+            suggest: { preview: true },
+          }}
+        />
+      </div>
     </div>
   );
 }
