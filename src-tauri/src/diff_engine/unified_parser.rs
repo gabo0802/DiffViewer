@@ -189,4 +189,53 @@ mod tests {
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].status, "added");
     }
+
+    #[test]
+    fn test_parse_git_unified_diff() {
+        let patch = "\
+commit abc123
+Author: Dev <dev@example.com>
+
+    touch git path
+
+diff --git a/src/lib.rs b/src/lib.rs
+index e69de29..4b825dc 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -0,0 +1,2 @@
++pub fn answer() -> i32 {
++    42
++}
+";
+        let files = parse_unified_diff(patch);
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].new_path, "src/lib.rs");
+        assert_eq!(files[0].status, "modified");
+    }
+
+    #[test]
+    fn test_parse_p4_unified_diff() {
+        let patch = "\
+Change 12345 by dev@workspace on 2026/05/15 pending
+
+Affected files ...
+
+... //depot/main/foo.cpp#7 edit
+
+Differences ...
+
+==== //depot/main/foo.cpp#7 - C:\\work\\foo.cpp ====
+--- //depot/main/foo.cpp#7
++++ C:\\work\\foo.cpp
+@@ -1,2 +1,2 @@
+ old
+-line
++line changed
+";
+        let files = parse_unified_diff(patch);
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].old_path, "//depot/main/foo.cpp#7");
+        assert_eq!(files[0].new_path, "C:\\work\\foo.cpp");
+        assert_eq!(files[0].hunks.len(), 1);
+    }
 }

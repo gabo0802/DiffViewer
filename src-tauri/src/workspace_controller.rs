@@ -23,6 +23,8 @@ pub fn import_patch(conn: &Connection, workspace_id: &str, patch_path: &str) -> 
         workspace_id: workspace_id.to_string(),
         title,
         source_type: "Patch".to_string(),
+        provider: "patch".to_string(),
+        kind: "patchImport".to_string(),
         source_meta_json: serde_json::json!({ "path": patch_resolved.to_string_lossy() }).to_string(),
         created_at: now,
     })?;
@@ -85,6 +87,8 @@ pub fn compare_two_files(
         workspace_id: workspace_id.to_string(),
         title: display_title.to_string(),
         source_type: "External".to_string(),
+        provider: "external".to_string(),
+        kind: "twoWayCompare".to_string(),
         source_meta_json: serde_json::json!({
             "left": left_resolved.to_string_lossy(),
             "right": right_resolved.to_string_lossy()

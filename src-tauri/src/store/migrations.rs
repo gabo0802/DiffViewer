@@ -62,4 +62,28 @@ pub fn run(conn: &Connection) -> Result<(), String> {
         CREATE INDEX IF NOT EXISTS idx_filediffs_diffset ON filediffs(diffset_id);
         "
     ).map_err(|e| e.to_string())
+        .and_then(|_| ensure_column(conn, "diffsets", "provider", "TEXT NOT NULL DEFAULT 'external'"))
+        .and_then(|_| ensure_column(conn, "diffsets", "kind", "TEXT NOT NULL DEFAULT 'externalCompare'"))
+}
+
+fn ensure_column(conn: &Connection, table: &str, column: &str, definition: &str) -> Result<(), String> {
+    let mut stmt = conn
+        .prepare(&format!("PRAGMA table_info({})", table))
+        .map_err(|e| e.to_string())?;
+    let columns = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    if columns.iter().any(|name| name == column) {
+        return Ok(());
+    }
+
+    conn.execute(
+        &format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, definition),
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }

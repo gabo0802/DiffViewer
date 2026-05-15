@@ -39,6 +39,8 @@ pub struct DiffSet {
     pub workspace_id: String,
     pub title: String,
     pub source_type: String,
+    pub provider: String,
+    pub kind: String,
     pub source_meta_json: String,
     pub created_at: i64,
 }
@@ -154,15 +156,15 @@ pub fn create_workspace(conn: &Connection, name: &str) -> Result<Workspace, Stri
 
 pub fn insert_diffset(conn: &Connection, ds: &DiffSet) -> Result<(), String> {
     conn.execute(
-        "INSERT INTO diffsets (diffset_id, workspace_id, title, source_type, source_meta_json, created_at) VALUES (?1,?2,?3,?4,?5,?6)",
-        params![ds.diffset_id, ds.workspace_id, ds.title, ds.source_type, ds.source_meta_json, ds.created_at],
+        "INSERT INTO diffsets (diffset_id, workspace_id, title, source_type, provider, kind, source_meta_json, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
+        params![ds.diffset_id, ds.workspace_id, ds.title, ds.source_type, ds.provider, ds.kind, ds.source_meta_json, ds.created_at],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }
 
 pub fn list_diffsets(conn: &Connection, workspace_id: &str) -> Result<Vec<DiffSet>, String> {
     let mut stmt = conn
-        .prepare("SELECT diffset_id, workspace_id, title, source_type, source_meta_json, created_at FROM diffsets WHERE workspace_id = ?1 ORDER BY created_at DESC")
+        .prepare("SELECT diffset_id, workspace_id, title, source_type, provider, kind, source_meta_json, created_at FROM diffsets WHERE workspace_id = ?1 ORDER BY created_at DESC")
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map(params![workspace_id], |row| {
@@ -171,8 +173,10 @@ pub fn list_diffsets(conn: &Connection, workspace_id: &str) -> Result<Vec<DiffSe
                 workspace_id: row.get(1)?,
                 title: row.get(2)?,
                 source_type: row.get(3)?,
-                source_meta_json: row.get(4)?,
-                created_at: row.get(5)?,
+                provider: row.get(4)?,
+                kind: row.get(5)?,
+                source_meta_json: row.get(6)?,
+                created_at: row.get(7)?,
             })
         })
         .map_err(|e| e.to_string())?;

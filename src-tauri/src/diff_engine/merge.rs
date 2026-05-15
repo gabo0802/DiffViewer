@@ -41,7 +41,6 @@ pub fn apply_hunk_to_buffer(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diff_engine::twoway::compute_hunks;
 
     #[test]
     fn test_init_merge() {

@@ -3,6 +3,7 @@
 mod diff_engine;
 mod io;
 mod open_request;
+mod scm;
 mod store;
 mod workspace_controller;
 
@@ -68,6 +69,41 @@ fn compare_two_files(state: State<AppState>, left_path: String, right_path: Stri
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let ws_id = state.current_workspace_id.lock().map_err(|e| e.to_string())?;
     workspace_controller::compare_two_files(&conn, &ws_id, &left_path, &right_path, None)
+}
+
+#[tauri::command]
+fn import_git_working_tree(state: State<AppState>, repo_path: String) -> Result<String, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let ws_id = state.current_workspace_id.lock().map_err(|e| e.to_string())?;
+    scm::import_git_working_tree(&conn, &ws_id, &repo_path)
+}
+
+#[tauri::command]
+fn import_git_commit(state: State<AppState>, repo_path: String, rev: String) -> Result<String, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let ws_id = state.current_workspace_id.lock().map_err(|e| e.to_string())?;
+    scm::import_git_commit(&conn, &ws_id, &repo_path, &rev)
+}
+
+#[tauri::command]
+fn import_p4_pending(state: State<AppState>, change: String, cwd: Option<String>) -> Result<String, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let ws_id = state.current_workspace_id.lock().map_err(|e| e.to_string())?;
+    scm::import_p4_pending(&conn, &ws_id, &change, cwd.as_deref())
+}
+
+#[tauri::command]
+fn import_p4_shelved(state: State<AppState>, change: String, cwd: Option<String>) -> Result<String, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let ws_id = state.current_workspace_id.lock().map_err(|e| e.to_string())?;
+    scm::import_p4_shelved(&conn, &ws_id, &change, cwd.as_deref())
+}
+
+#[tauri::command]
+fn import_p4_submitted(state: State<AppState>, change: String, cwd: Option<String>) -> Result<String, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let ws_id = state.current_workspace_id.lock().map_err(|e| e.to_string())?;
+    scm::import_p4_submitted(&conn, &ws_id, &change, cwd.as_deref())
 }
 
 // ΓöÇΓöÇ Diff access commands ΓöÇΓöÇ
@@ -160,6 +196,24 @@ fn apply_hunk_to_mergebuffer(
     };
     store::upsert_merge_buffer(&conn, &updated)?;
     Ok(updated)
+}
+
+#[tauri::command]
+fn set_mergebuffer_text(
+    state: State<AppState>,
+    filediff_id: String,
+    text: String,
+) -> Result<store::MergeBuffer, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let now = chrono::Utc::now().timestamp();
+    let mb = store::MergeBuffer {
+        filediff_id: filediff_id.clone(),
+        merged_content_json: serde_json::json!({ "type": "virtual", "text": text }).to_string(),
+        dirty: true,
+        updated_at: now,
+    };
+    store::upsert_merge_buffer(&conn, &mb)?;
+    Ok(mb)
 }
 
 #[tauri::command]
@@ -349,12 +403,18 @@ fn main() {
             open_workspace,
             import_patch,
             compare_two_files,
+            import_git_working_tree,
+            import_git_commit,
+            import_p4_pending,
+            import_p4_shelved,
+            import_p4_submitted,
             list_diffsets,
             list_filediffs,
             get_rendered_diff,
             mark_reviewed,
             init_mergebuffer,
             apply_hunk_to_mergebuffer,
+            set_mergebuffer_text,
             save_mergebuffer,
             save_mergebuffer_as,
             handle_open_request,
