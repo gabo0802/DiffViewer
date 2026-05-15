@@ -35,7 +35,16 @@ pub fn parse_unified_diff(patch: &str) -> Vec<PatchFileDiff> {
     let mut hunk_counter: usize = 0;
 
     for line in patch.lines() {
-        if line.starts_with("--- ") {
+        if line.starts_with("diff --git ") {
+            if let Some(ref mut f) = current_file {
+                if let Some(h) = current_hunk.take() {
+                    f.hunks.push(h);
+                }
+            }
+            if let Some(f) = current_file.take() {
+                files.push(f);
+            }
+        } else if line.starts_with("--- ") {
             // Flush previous hunk/file
             if let Some(ref mut f) = current_file {
                 if let Some(h) = current_hunk.take() {
@@ -85,6 +94,15 @@ pub fn parse_unified_diff(patch: &str) -> Vec<PatchFileDiff> {
                     lines: Vec::new(),
                 });
             }
+        } else if line.starts_with("index ")
+            || line.starts_with("new file mode ")
+            || line.starts_with("deleted file mode ")
+            || line.starts_with("similarity index ")
+            || line.starts_with("rename from ")
+            || line.starts_with("rename to ")
+            || line.starts_with("\\ No newline at end of file")
+        {
+            continue;
         } else if let Some(ref mut h) = current_hunk {
             if let Some(rest) = line.strip_prefix('+') {
                 h.lines.push(HunkLine {
@@ -211,6 +229,32 @@ index e69de29..4b825dc 100644
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].new_path, "src/lib.rs");
         assert_eq!(files[0].status, "modified");
+    }
+
+    #[test]
+    fn test_ignores_git_file_headers_between_hunks() {
+        let patch = "\
+diff --git a/src/one.ts b/src/one.ts
+index 1111111..2222222 100644
+--- a/src/one.ts
++++ b/src/one.ts
+@@ -1 +1 @@
+-old one
++new one
+diff --git a/src/two.ts b/src/two.ts
+index 3333333..4444444 100644
+--- a/src/two.ts
++++ b/src/two.ts
+@@ -1 +1 @@
+-old two
++new two
+";
+        let files = parse_unified_diff(patch);
+        assert_eq!(files.len(), 2);
+        assert_eq!(files[0].new_path, "src/one.ts");
+        assert_eq!(files[0].hunks[0].lines.len(), 2);
+        assert_eq!(files[1].new_path, "src/two.ts");
+        assert_eq!(files[1].hunks[0].lines.len(), 2);
     }
 
     #[test]

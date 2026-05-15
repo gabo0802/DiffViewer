@@ -29,6 +29,8 @@ export default function DiffViewer({
   const leftEditorRef = useRef<any>(null);
   const rightEditorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
+  const leftDecorationIdsRef = useRef<string[]>([]);
+  const rightDecorationIdsRef = useRef<string[]>([]);
   const suppressScrollSyncRef = useRef(false);
   const lastReportedTopRowRef = useRef(1);
   const lastAppliedSyncTokenRef = useRef(0);
@@ -84,12 +86,7 @@ export default function DiffViewer({
 
   useEffect(() => {
     if (!model || !monacoRef.current) return;
-    if (leftEditorRef.current) {
-      leftEditorRef.current.deltaDecorations([], buildDecorations(model.rows, "left", monacoRef.current));
-    }
-    if (rightEditorRef.current) {
-      rightEditorRef.current.deltaDecorations([], buildDecorations(model.rows, "right", monacoRef.current));
-    }
+    applyDecorations(model);
   }, [model]);
 
   useEffect(() => {
@@ -105,6 +102,9 @@ export default function DiffViewer({
     monacoRef.current = monaco;
     if (side === "left") leftEditorRef.current = editor;
     if (side === "right") rightEditorRef.current = editor;
+    if (model) {
+      applyDecorations(model);
+    }
 
     editor.onDidScrollChange(() => {
       if (suppressScrollSyncRef.current) return;
@@ -132,6 +132,22 @@ export default function DiffViewer({
       } else {
         editor.revealLineInCenter(lineNumber);
       }
+    }
+  };
+
+  const applyDecorations = (nextModel: RenderedDiffModel) => {
+    if (!monacoRef.current) return;
+    if (leftEditorRef.current) {
+      leftDecorationIdsRef.current = leftEditorRef.current.deltaDecorations(
+        leftDecorationIdsRef.current,
+        buildDecorations(nextModel.rows, "left", monacoRef.current)
+      );
+    }
+    if (rightEditorRef.current) {
+      rightDecorationIdsRef.current = rightEditorRef.current.deltaDecorations(
+        rightDecorationIdsRef.current,
+        buildDecorations(nextModel.rows, "right", monacoRef.current)
+      );
     }
   };
 
