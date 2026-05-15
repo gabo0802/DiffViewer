@@ -277,16 +277,18 @@ fn save_mergebuffer(state: State<AppState>, filediff_id: String) -> Result<Strin
 #[tauri::command]
 fn save_mergebuffer_as(state: State<AppState>, filediff_id: String, path: String) -> Result<String, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let fd = store::get_filediff(&conn, &filediff_id)?;
     let mb = store::get_merge_buffer(&conn, &filediff_id)?;
     let merged_text = resolve_content_source(&mb.merged_content_json)?;
-    io::atomic_write(std::path::Path::new(&path), merged_text.as_bytes())?;
+    let resolved_path = resolve_save_as_target(&fd.write_target_json, &path)?;
+    io::atomic_write(std::path::Path::new(&resolved_path), merged_text.as_bytes())?;
 
     // Reattach write target to the chosen path
     let now = chrono::Utc::now().timestamp();
     conn.execute(
         "UPDATE filediffs SET write_target_json = ?1 WHERE filediff_id = ?2",
         rusqlite::params![
-            serde_json::json!({ "type": "path", "path": path }).to_string(),
+            serde_json::json!({ "type": "path", "path": resolved_path }).to_string(),
             filediff_id
         ],
     ).map_err(|e| e.to_string())?;
@@ -349,6 +351,25 @@ fn resolve_content_source(json: &str) -> Result<String, String> {
         }
         _ => Err(format!("Unknown content source type in: {}", json)),
     }
+}
+
+fn resolve_save_as_target(write_target_json: &str, requested_path: &str) -> Result<String, String> {
+    let requested = std::path::PathBuf::from(requested_path);
+    if requested.is_absolute() {
+        return Ok(requested.to_string_lossy().into_owned());
+    }
+
+    let write_target: serde_json::Value =
+        serde_json::from_str(write_target_json).map_err(|e| e.to_string())?;
+    if let Some(existing_path) = write_target.get("path").and_then(|value| value.as_str()) {
+        let existing = std::path::Path::new(existing_path);
+        if let Some(parent) = existing.parent() {
+            return Ok(parent.join(&requested).to_string_lossy().into_owned());
+        }
+    }
+
+    let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+    Ok(cwd.join(requested).to_string_lossy().into_owned())
 }
 
 fn main() {

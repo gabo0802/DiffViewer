@@ -57,6 +57,9 @@ pub fn read_snapshot(cache_path: &str) -> Result<String, String> {
 
 /// Atomic write with backup.
 pub fn atomic_write(target: &Path, content: &[u8]) -> Result<(), String> {
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Create directory failed: {}", e))?;
+    }
     // Backup existing file
     if target.exists() {
         let backup = target.with_extension("diffedit.bak");

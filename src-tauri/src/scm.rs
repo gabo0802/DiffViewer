@@ -11,6 +11,7 @@ pub struct P4OpenedFile {
     pub depot_path: String,
     pub action: String,
     pub change: String,
+    pub local_path: Option<String>,
 }
 
 pub fn import_git_working_tree(
@@ -39,7 +40,9 @@ pub fn import_git_working_tree(
             }),
             left_label: "HEAD".to_string(),
             right_label: "working tree".to_string(),
-            write_target: serde_json::json!({ "type": "save_as_required" }),
+            write_target_mode: WriteTargetMode::GitWorkingTree {
+                repo_path: repo_path.to_string(),
+            },
         },
         None,
     )
@@ -114,7 +117,7 @@ pub fn import_git_commit(
             }),
             left_label: format!("{}^", short_rev(rev)),
             right_label: short_rev(rev),
-            write_target: serde_json::json!({ "type": "save_as_required" }),
+            write_target_mode: WriteTargetMode::SaveAsRequired,
         },
         None,
     )
@@ -127,7 +130,8 @@ pub fn import_p4_pending(
     cwd: Option<&str>,
 ) -> Result<String, String> {
     let opened = run_command("p4", &["opened", "-c", change], cwd)?;
-    let opened_files = parse_p4_opened(&opened);
+    let mut opened_files = parse_p4_opened(&opened);
+    populate_p4_local_paths(&mut opened_files, cwd)?;
     let mut args: Vec<String> = vec!["diff".to_string(), "-du".to_string()];
     args.extend(opened_files.iter().map(|file| file.depot_path.clone()));
     let diff = if opened_files.is_empty() {
@@ -161,7 +165,9 @@ pub fn import_p4_pending(
             }),
             left_label: "have revision".to_string(),
             right_label: "workspace".to_string(),
-            write_target: serde_json::json!({ "type": "save_as_required" }),
+            write_target_mode: WriteTargetMode::P4Pending {
+                cwd: cwd.map(|value| value.to_string()),
+            },
         },
         Some(&action_map),
     )
@@ -251,7 +257,7 @@ fn import_p4_describe(
             }),
             left_label: left_label.to_string(),
             right_label: right_label.to_string(),
-            write_target: serde_json::json!({ "type": "save_as_required" }),
+            write_target_mode: WriteTargetMode::SaveAsRequired,
         },
         Some(actions),
     )
@@ -279,7 +285,9 @@ fn replace_git_working_tree(conn: &Connection, diffset: &DiffSet, repo_path: &st
             }),
             left_label: "HEAD".to_string(),
             right_label: "working tree".to_string(),
-            write_target: serde_json::json!({ "type": "save_as_required" }),
+            write_target_mode: WriteTargetMode::GitWorkingTree {
+                repo_path: repo_path.to_string(),
+            },
         },
         None,
     )
@@ -292,7 +300,8 @@ fn replace_p4_pending(
     cwd: Option<&str>,
 ) -> Result<(), String> {
     let opened = run_command("p4", &["opened", "-c", change], cwd)?;
-    let opened_files = parse_p4_opened(&opened);
+    let mut opened_files = parse_p4_opened(&opened);
+    populate_p4_local_paths(&mut opened_files, cwd)?;
     let mut args: Vec<String> = vec!["diff".to_string(), "-du".to_string()];
     args.extend(opened_files.iter().map(|file| file.depot_path.clone()));
     let diff = if opened_files.is_empty() {
@@ -326,7 +335,9 @@ fn replace_p4_pending(
             }),
             left_label: "have revision".to_string(),
             right_label: "workspace".to_string(),
-            write_target: serde_json::json!({ "type": "save_as_required" }),
+            write_target_mode: WriteTargetMode::P4Pending {
+                cwd: cwd.map(|value| value.to_string()),
+            },
         },
         Some(&action_map),
     )?;
@@ -342,7 +353,14 @@ struct DiffSetDescriptor {
     source_meta: serde_json::Value,
     left_label: String,
     right_label: String,
-    write_target: serde_json::Value,
+    write_target_mode: WriteTargetMode,
+}
+
+#[derive(Clone)]
+enum WriteTargetMode {
+    SaveAsRequired,
+    GitWorkingTree { repo_path: String },
+    P4Pending { cwd: Option<String> },
 }
 
 fn import_unified_diff_text(
@@ -377,7 +395,7 @@ fn import_unified_diff_text(
             pf,
             &descriptor.left_label,
             &descriptor.right_label,
-            descriptor.write_target.clone(),
+            &descriptor.write_target_mode,
             action_by_path,
             now,
         )?;
@@ -402,7 +420,7 @@ fn replace_diffset_contents(
         source_meta,
         left_label,
         right_label,
-        write_target,
+        write_target_mode,
     } = descriptor;
     let updated = DiffSet {
         diffset_id: diffset.diffset_id.clone(),
@@ -424,7 +442,7 @@ fn replace_diffset_contents(
             pf,
             &left_label,
             &right_label,
-            write_target.clone(),
+            &write_target_mode,
             action_by_path,
             chrono::Utc::now().timestamp(),
         )?;
@@ -439,7 +457,7 @@ fn insert_patch_file_diff(
     pf: &PatchFileDiff,
     left_label: &str,
     right_label: &str,
-    write_target: serde_json::Value,
+    write_target_mode: &WriteTargetMode,
     action_by_path: Option<&HashMap<String, String>>,
     now: i64,
 ) -> Result<(), String> {
@@ -450,6 +468,7 @@ fn insert_patch_file_diff(
     let action = action_by_path
         .and_then(|map| map.get(&strip_p4_rev(&display_path)).cloned())
         .unwrap_or_else(|| pf.status.clone());
+    let write_target = derive_write_target(write_target_mode, pf, &display_path);
 
     store::insert_filediff(
         conn,
@@ -467,6 +486,48 @@ fn insert_patch_file_diff(
             created_at: now,
         },
     )
+}
+
+fn derive_write_target(
+    mode: &WriteTargetMode,
+    pf: &PatchFileDiff,
+    display_path: &str,
+) -> serde_json::Value {
+    match mode {
+        WriteTargetMode::SaveAsRequired => serde_json::json!({ "type": "save_as_required" }),
+        WriteTargetMode::GitWorkingTree { repo_path } => {
+            let resolved = Path::new(repo_path).join(display_path);
+            serde_json::json!({ "type": "path", "path": resolved.to_string_lossy() })
+        }
+        WriteTargetMode::P4Pending { cwd } => {
+            if let Some(local_path) = pending_local_path(pf, cwd.as_deref()) {
+                serde_json::json!({ "type": "path", "path": local_path })
+            } else {
+                serde_json::json!({ "type": "save_as_required" })
+            }
+        }
+    }
+}
+
+fn pending_local_path(pf: &PatchFileDiff, cwd: Option<&str>) -> Option<String> {
+    if pf.new_path != "/dev/null" {
+        let path = Path::new(&pf.new_path);
+        if path.is_absolute() {
+            return Some(path.to_string_lossy().into_owned());
+        }
+        if let Some(cwd) = cwd {
+            return Some(Path::new(cwd).join(path).to_string_lossy().into_owned());
+        }
+    }
+
+    if pf.old_path != "/dev/null" {
+        let path = Path::new(&pf.old_path);
+        if path.is_absolute() {
+            return Some(path.to_string_lossy().into_owned());
+        }
+    }
+
+    None
 }
 
 fn add_opened_files_without_diffs(
@@ -497,13 +558,57 @@ fn add_opened_files_without_diffs(
                 content_left_json: serde_json::json!({ "type": "virtual", "text": "" }).to_string(),
                 content_right_json: serde_json::json!({ "type": "virtual", "text": "" }).to_string(),
                 hunks_json: "[]".to_string(),
-                write_target_json: serde_json::json!({ "type": "save_as_required" }).to_string(),
+                write_target_json: file
+                    .local_path
+                    .as_ref()
+                    .map(|path| serde_json::json!({ "type": "path", "path": path }).to_string())
+                    .unwrap_or_else(|| serde_json::json!({ "type": "save_as_required" }).to_string()),
                 created_at: now,
             },
         )?;
     }
 
     Ok(())
+}
+
+fn populate_p4_local_paths(opened_files: &mut [P4OpenedFile], cwd: Option<&str>) -> Result<(), String> {
+    let depot_paths = opened_files
+        .iter()
+        .map(|file| file.depot_path.clone())
+        .collect::<Vec<_>>();
+    if depot_paths.is_empty() {
+        return Ok(());
+    }
+
+    let local_paths = resolve_p4_local_paths(&depot_paths, cwd)?;
+    for file in opened_files.iter_mut() {
+        file.local_path = local_paths.get(&file.depot_path).cloned();
+    }
+    Ok(())
+}
+
+fn resolve_p4_local_paths(
+    depot_paths: &[String],
+    cwd: Option<&str>,
+) -> Result<HashMap<String, String>, String> {
+    let mut args = vec!["where".to_string()];
+    args.extend(depot_paths.iter().cloned());
+    let output = run_command_owned("p4", &args, cwd)?;
+    let mut mapping = HashMap::new();
+
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('-') {
+            continue;
+        }
+
+        let parts = trimmed.split_whitespace().collect::<Vec<_>>();
+        if parts.len() >= 3 && parts[0].starts_with("//") {
+            mapping.insert(parts[0].to_string(), parts[2].to_string());
+        }
+    }
+
+    Ok(mapping)
 }
 
 pub fn parse_p4_opened(output: &str) -> Vec<P4OpenedFile> {
@@ -527,6 +632,7 @@ pub fn parse_p4_opened(output: &str) -> Vec<P4OpenedFile> {
                 depot_path,
                 action,
                 change,
+                local_path: None,
             })
         })
         .collect()
@@ -671,11 +777,13 @@ mod tests {
                     depot_path: "//depot/main/a.cpp".to_string(),
                     action: "edit".to_string(),
                     change: "default".to_string(),
+                    local_path: None,
                 },
                 P4OpenedFile {
                     depot_path: "//depot/main/b.cpp".to_string(),
                     action: "add".to_string(),
                     change: "12345".to_string(),
+                    local_path: None,
                 },
             ]
         );

@@ -36,16 +36,18 @@ export default function MergePanel({ fileDiff, visible, onToggle }: Props) {
       await api.saveMergebuffer(fileDiff.filediff_id);
       setBuffer((prev) => (prev ? { ...prev, dirty: false } : prev));
     } catch (e: any) {
-      if (e?.toString?.().includes("save_as_required")) {
+      const message = e?.toString?.() ?? String(e);
+      if (message.toLowerCase().includes("save as required")) {
         await handleSaveAs();
       } else {
         console.error(e);
+        alert(`Save failed: ${message}`);
       }
     }
   };
 
   const handleSaveAs = async () => {
-    const suggested = fileDiff.display_path || "merged-output.txt";
+    const suggested = suggestedSavePath(fileDiff);
     const path = window.prompt("Save merged output as path:", suggested);
     if (!path) return;
     try {
@@ -122,4 +124,16 @@ function extractText(json: string): string {
   } catch {
     return "";
   }
+}
+
+function suggestedSavePath(fileDiff: FileDiff): string {
+  try {
+    const parsed = JSON.parse(fileDiff.write_target_json);
+    if (parsed?.type === "path" && typeof parsed.path === "string") {
+      return parsed.path;
+    }
+  } catch {
+    // Ignore and fall back to display path.
+  }
+  return fileDiff.display_path || "merged-output.txt";
 }
