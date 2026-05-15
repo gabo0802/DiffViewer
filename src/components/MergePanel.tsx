@@ -13,6 +13,7 @@ interface Props {
   visible: boolean;
   onToggle: () => void;
   editorPreferences: EditorPreferences;
+  theme: "dark" | "light";
   onEditorPreferencesChange: React.Dispatch<React.SetStateAction<EditorPreferences>>;
   initialFocusLine: number;
   onScrollLineChange?: (topLine: number) => void;
@@ -25,6 +26,7 @@ export default function MergePanel({
   visible,
   onToggle,
   editorPreferences,
+  theme,
   onEditorPreferencesChange,
   initialFocusLine,
   onScrollLineChange,
@@ -239,6 +241,7 @@ export default function MergePanel({
         <Editor
           height="100%"
           language={editorLanguage}
+          theme={theme === "dark" ? "vs-dark" : "vs"}
           value={mergedText}
           onChange={(value) => setMergedText(value ?? "")}
           onMount={(editor) => {

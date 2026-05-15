@@ -7,6 +7,7 @@ import type { FileDiff, RenderedDiffModel, AlignmentRow } from "../types";
 interface Props {
   fileDiff: FileDiff;
   editorPreferences: EditorPreferences;
+  theme: "dark" | "light";
   onModelChange?: (model: RenderedDiffModel | null) => void;
   onScrollRowChange?: (topRow: number) => void;
   syncedTopRow?: number | null;
@@ -16,6 +17,7 @@ interface Props {
 export default function DiffViewer({
   fileDiff,
   editorPreferences,
+  theme,
   onModelChange,
   onScrollRowChange,
   syncedTopRow = null,
@@ -178,6 +180,7 @@ export default function DiffViewer({
                 key={`left-${fileDiff.filediff_id}-${model.rows.length}`}
                 height="100%"
                 language={editorLanguage}
+                theme={theme === "dark" ? "vs-dark" : "vs"}
                 value={leftText}
                 onMount={decorateOnMount("left")}
                 options={{
@@ -198,6 +201,7 @@ export default function DiffViewer({
                 key={`right-${fileDiff.filediff_id}-${model.rows.length}`}
                 height="100%"
                 language={editorLanguage}
+                theme={theme === "dark" ? "vs-dark" : "vs"}
                 value={rightText}
                 onMount={decorateOnMount("right")}
                 options={{

@@ -1,4 +1,5 @@
-:root {
+:root,
+:root[data-theme="dark"] {
   --bg: #1e1e1e;
   --sidebar-bg: #252526;
   --panel-bg: #1e1e1e;
@@ -10,8 +11,28 @@
   --accent: #0e639c;
   --del-bg: rgba(255, 0, 0, 0.15);
   --add-bg: rgba(0, 180, 0, 0.15);
+  --hover-bg: rgba(255,255,255,0.08);
+  --subtle-hover-bg: rgba(255,255,255,0.05);
+  --empty-row-bg: rgba(255,255,255,0.04);
   --font: "Segoe UI", Inter, system-ui, sans-serif;
   --mono: "Cascadia Code", "Fira Code", Consolas, monospace;
+}
+
+:root[data-theme="light"] {
+  --bg: #f5f7fb;
+  --sidebar-bg: #eef2f7;
+  --panel-bg: #ffffff;
+  --tab-bg: #e7ebf2;
+  --tab-active: #ffffff;
+  --text: #1f2937;
+  --text-muted: #667085;
+  --border: #c7d0dd;
+  --accent: #2563eb;
+  --del-bg: rgba(220, 38, 38, 0.14);
+  --add-bg: rgba(22, 163, 74, 0.14);
+  --hover-bg: rgba(15, 23, 42, 0.08);
+  --subtle-hover-bg: rgba(15, 23, 42, 0.05);
+  --empty-row-bg: rgba(15, 23, 42, 0.04);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -100,7 +121,7 @@ html, body, #root {
   font-size: 11px;
 }
 .icon-button:hover,
-.sidebar-actions button:hover { background: rgba(255,255,255,0.08); }
+.sidebar-actions button:hover { background: var(--hover-bg); }
 .sidebar-actions button:disabled { opacity: 0.5; cursor: wait; }
 
 .sidebar-actions {
@@ -155,7 +176,7 @@ html, body, #root {
   cursor: pointer;
   font-size: 13px;
 }
-.sidebar-diffset-btn:hover { background: rgba(255,255,255,0.05); }
+.sidebar-diffset-btn:hover { background: var(--subtle-hover-bg); }
 
 .sidebar-diffset-row {
   display: flex;
@@ -174,7 +195,7 @@ html, body, #root {
 }
 .sidebar-diffset-close:hover {
   color: var(--text);
-  background: rgba(255,255,255,0.08);
+  background: var(--hover-bg);
 }
 
 .chevron { font-size: 10px; width: 12px; }
@@ -233,7 +254,7 @@ html, body, #root {
   cursor: pointer;
   font-size: 12px;
 }
-.sidebar-file-btn:hover { background: rgba(255,255,255,0.05); }
+.sidebar-file-btn:hover { background: var(--subtle-hover-bg); }
 
 .file-path {
   flex: 1;
@@ -332,9 +353,9 @@ html, body, #root {
   flex: 0 0 auto;
 }
 .tab-close:hover {
-  color: #fff;
+  color: var(--text);
   border-color: var(--border);
-  background: rgba(255,255,255,0.08);
+  background: var(--hover-bg);
 }
 
 .toolbar-actions {
@@ -423,7 +444,21 @@ html, body, #root {
   cursor: pointer;
   font-size: 11px;
 }
-.diff-nav button:hover { background: rgba(255,255,255,0.1); }
+.diff-nav button:hover { background: var(--hover-bg); }
+
+.toolbar-button {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.toolbar-button:hover {
+  background: var(--hover-bg);
+}
 
 .diff-editors {
   flex: 1;
@@ -550,7 +585,7 @@ html, body, #root {
   cursor: pointer;
   font-size: 11px;
 }
-.merge-toolbar button:hover { background: rgba(255,255,255,0.1); }
+.merge-toolbar button:hover { background: var(--hover-bg); }
 
 /* Make inline suggestion/ghost text visible on dark editor backgrounds. */
 .monaco-editor .ghost-text,
@@ -568,5 +603,5 @@ html, body, #root {
 }
 
 .monaco-editor .diff-line-empty {
-  background: rgba(255,255,255,0.04);
+  background: var(--empty-row-bg);
 }

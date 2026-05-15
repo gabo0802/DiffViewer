@@ -10,6 +10,7 @@ import type { FileDiff, RenderedDiffModel } from "./types";
 
 const SIDEBAR_WIDTH_KEY = "diffviewer.sidebarWidth";
 const EDITOR_PREFERENCES_KEY = "diffviewer.editorPreferences";
+const THEME_KEY = "diffviewer.theme";
 
 export default function App() {
   const [tabs, setTabs] = useState<FileDiff[]>([]);
@@ -22,6 +23,7 @@ export default function App() {
   const [editorPreferences, setEditorPreferences] = useState<EditorPreferences>(() =>
     loadEditorPreferences(EDITOR_PREFERENCES_KEY)
   );
+  const [theme, setTheme] = useState<ThemeMode>(() => readStoredTheme());
   const sidebarStartX = useRef(0);
   const sidebarStartWidth = useRef(sidebarWidth);
 
@@ -63,6 +65,11 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(EDITOR_PREFERENCES_KEY, JSON.stringify(editorPreferences));
   }, [editorPreferences]);
+
+  useEffect(() => {
+    window.localStorage.setItem(THEME_KEY, theme);
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   useEffect(() => {
     setRenderedModel(null);
@@ -159,6 +166,13 @@ export default function App() {
           ))}
 
           <div className="toolbar-actions">
+            <button
+              type="button"
+              className="toolbar-button"
+              onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+            >
+              {theme === "dark" ? "Light Mode" : "Dark Mode"}
+            </button>
             {currentFd && (
               <button
                 type="button"
@@ -177,6 +191,7 @@ export default function App() {
               <DiffViewer
                 fileDiff={currentFd}
                 editorPreferences={editorPreferences}
+                theme={theme}
                 onModelChange={handleRenderedModelChange}
                 onScrollRowChange={handleDiffScroll}
                 syncedTopRow={syncSignal?.source === "merge" ? syncSignal.diffTopRow : null}
@@ -195,6 +210,7 @@ export default function App() {
               visible={mergeVisible}
               onToggle={() => setMergeVisible(false)}
               editorPreferences={editorPreferences}
+              theme={theme}
               onEditorPreferencesChange={setEditorPreferences}
               initialFocusLine={firstChangedMergeLine}
               onScrollLineChange={handleMergeScroll}
@@ -218,6 +234,8 @@ function readStoredSidebarWidth() {
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
+
+type ThemeMode = "dark" | "light";
 
 type ScrollSyncSignal = {
   source: "diff" | "merge";
@@ -268,4 +286,9 @@ function mapMergeLineToDiffRow(model: RenderedDiffModel, mergeTopLine: number) {
   }
 
   return fallbackRow;
+}
+
+function readStoredTheme(): ThemeMode {
+  const stored = window.localStorage.getItem(THEME_KEY);
+  return stored === "light" ? "light" : "dark";
 }
