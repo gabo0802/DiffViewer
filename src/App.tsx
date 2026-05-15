@@ -57,6 +57,10 @@ export default function App() {
     () => (currentFd ? getFirstChangedMergeLine(currentFd) : 1),
     [currentFd]
   );
+  const canEditCurrent = useMemo(
+    () => (currentFd ? isEditableFileDiff(currentFd) : false),
+    [currentFd]
+  );
 
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth));
@@ -75,6 +79,12 @@ export default function App() {
     setRenderedModel(null);
     setSyncSignal(null);
   }, [currentFd?.filediff_id]);
+
+  useEffect(() => {
+    if (!canEditCurrent && mergeVisible) {
+      setMergeVisible(false);
+    }
+  }, [canEditCurrent, mergeVisible]);
 
   useEffect(() => {
     if (!isResizingSidebar) return;
@@ -173,7 +183,7 @@ export default function App() {
             >
               {theme === "dark" ? "Light Mode" : "Dark Mode"}
             </button>
-            {currentFd && (
+            {currentFd && canEditCurrent && (
               <button
                 type="button"
                 className="btn-merge-toggle"
@@ -204,7 +214,7 @@ export default function App() {
             )}
           </div>
 
-          {currentFd && (
+          {currentFd && canEditCurrent && (
             <MergePanel
               fileDiff={currentFd}
               visible={mergeVisible}
@@ -291,4 +301,13 @@ function mapMergeLineToDiffRow(model: RenderedDiffModel, mergeTopLine: number) {
 function readStoredTheme(): ThemeMode {
   const stored = window.localStorage.getItem(THEME_KEY);
   return stored === "light" ? "light" : "dark";
+}
+
+function isEditableFileDiff(fileDiff: FileDiff) {
+  try {
+    const parsed = JSON.parse(fileDiff.write_target_json);
+    return parsed?.type !== "read_only";
+  } catch {
+    return true;
+  }
 }

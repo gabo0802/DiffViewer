@@ -11,6 +11,7 @@ pub struct P4OpenedFile {
     pub depot_path: String,
     pub action: String,
     pub change: String,
+    pub client: Option<String>,
     pub local_path: Option<String>,
 }
 
@@ -129,15 +130,16 @@ pub fn import_p4_pending(
     change: &str,
     cwd: Option<&str>,
 ) -> Result<String, String> {
-    let opened = run_command("p4", &["opened", "-c", change], cwd)?;
+    let opened = run_command("p4", &["opened", "-a", "-c", change], cwd)?;
     let mut opened_files = parse_p4_opened(&opened);
-    populate_p4_local_paths(&mut opened_files, cwd)?;
+    let client = opened_files.iter().find_map(|file| file.client.clone());
+    populate_p4_local_paths(&mut opened_files, cwd, client.as_deref())?;
     let mut args: Vec<String> = vec!["diff".to_string(), "-du".to_string()];
     args.extend(opened_files.iter().map(|file| file.depot_path.clone()));
     let diff = if opened_files.is_empty() {
         String::new()
     } else {
-        run_command_owned("p4", &args, cwd)?
+        run_p4_owned(&args, cwd, client.as_deref())?
     };
     let title = if change == "default" {
         "P4 default pending changelist".to_string()
@@ -167,6 +169,7 @@ pub fn import_p4_pending(
             right_label: "workspace".to_string(),
             write_target_mode: WriteTargetMode::P4Pending {
                 cwd: cwd.map(|value| value.to_string()),
+                client,
             },
         },
         Some(&action_map),
@@ -237,6 +240,7 @@ fn import_p4_describe(
     actions: &HashMap<String, String>,
 ) -> Result<String, String> {
     let desc = first_p4_description_line(output);
+    let client = parse_p4_describe_client(output);
     let title = desc
         .map(|line| format!("{}: {}", fallback_title, line))
         .unwrap_or_else(|| fallback_title.to_string());
@@ -257,7 +261,10 @@ fn import_p4_describe(
             }),
             left_label: left_label.to_string(),
             right_label: right_label.to_string(),
-            write_target_mode: WriteTargetMode::SaveAsRequired,
+            write_target_mode: WriteTargetMode::P4ReadOnly {
+                cwd: cwd.map(|value| value.to_string()),
+                client,
+            },
         },
         Some(actions),
     )
@@ -299,15 +306,16 @@ fn replace_p4_pending(
     change: &str,
     cwd: Option<&str>,
 ) -> Result<(), String> {
-    let opened = run_command("p4", &["opened", "-c", change], cwd)?;
+    let opened = run_command("p4", &["opened", "-a", "-c", change], cwd)?;
     let mut opened_files = parse_p4_opened(&opened);
-    populate_p4_local_paths(&mut opened_files, cwd)?;
+    let client = opened_files.iter().find_map(|file| file.client.clone());
+    populate_p4_local_paths(&mut opened_files, cwd, client.as_deref())?;
     let mut args: Vec<String> = vec!["diff".to_string(), "-du".to_string()];
     args.extend(opened_files.iter().map(|file| file.depot_path.clone()));
     let diff = if opened_files.is_empty() {
         String::new()
     } else {
-        run_command_owned("p4", &args, cwd)?
+        run_p4_owned(&args, cwd, client.as_deref())?
     };
     let title = if change == "default" {
         "P4 default pending changelist".to_string()
@@ -337,6 +345,7 @@ fn replace_p4_pending(
             right_label: "workspace".to_string(),
             write_target_mode: WriteTargetMode::P4Pending {
                 cwd: cwd.map(|value| value.to_string()),
+                client,
             },
         },
         Some(&action_map),
@@ -360,7 +369,8 @@ struct DiffSetDescriptor {
 enum WriteTargetMode {
     SaveAsRequired,
     GitWorkingTree { repo_path: String },
-    P4Pending { cwd: Option<String> },
+    P4Pending { cwd: Option<String>, client: Option<String> },
+    P4ReadOnly { cwd: Option<String>, client: Option<String> },
 }
 
 fn import_unified_diff_text(
@@ -516,11 +526,11 @@ fn derive_content_sources(
                 right_json,
             ))
         }
-        WriteTargetMode::P4Pending { cwd } => {
+        WriteTargetMode::P4Pending { cwd, client } => {
             let left_json = if pf.old_path == "/dev/null" {
                 serde_json::json!({ "type": "virtual", "text": "" }).to_string()
             } else if pf.old_path.starts_with("//") {
-                serde_json::json!({ "type": "virtual", "text": p4_print_file(&pf.old_path, cwd.as_deref())? }).to_string()
+                serde_json::json!({ "type": "virtual", "text": p4_print_file(&pf.old_path, cwd.as_deref(), client.as_deref())? }).to_string()
             } else {
                 serde_json::json!({ "type": "virtual", "text": reconstruct_old_text(pf) }).to_string()
             };
@@ -534,6 +544,26 @@ fn derive_content_sources(
                 serde_json::json!({ "type": "virtual", "text": reconstruct_new_text(pf) }).to_string()
             };
             Ok((left_json, right_json))
+        }
+        WriteTargetMode::P4ReadOnly { cwd, client } => {
+            let left_text = if pf.old_path == "/dev/null" {
+                String::new()
+            } else if pf.old_path.starts_with("//") {
+                p4_print_file(&pf.old_path, cwd.as_deref(), client.as_deref())?
+            } else {
+                reconstruct_old_text(pf)
+            };
+            let right_text = if pf.new_path == "/dev/null" {
+                String::new()
+            } else if pf.new_path.starts_with("//") {
+                p4_print_file(&pf.new_path, cwd.as_deref(), client.as_deref())?
+            } else {
+                reconstruct_new_text(pf)
+            };
+            Ok((
+                serde_json::json!({ "type": "virtual", "text": left_text }).to_string(),
+                serde_json::json!({ "type": "virtual", "text": right_text }).to_string(),
+            ))
         }
     }
 }
@@ -549,13 +579,14 @@ fn derive_write_target(
             let resolved = Path::new(repo_path).join(display_path);
             serde_json::json!({ "type": "path", "path": resolved.to_string_lossy() })
         }
-        WriteTargetMode::P4Pending { cwd } => {
+        WriteTargetMode::P4Pending { cwd, .. } => {
             if let Some(local_path) = pending_local_path(pf, cwd.as_deref()) {
                 serde_json::json!({ "type": "path", "path": local_path })
             } else {
                 serde_json::json!({ "type": "save_as_required" })
             }
         }
+        WriteTargetMode::P4ReadOnly { .. } => serde_json::json!({ "type": "read_only" }),
     }
 }
 
@@ -621,7 +652,11 @@ fn add_opened_files_without_diffs(
     Ok(())
 }
 
-fn populate_p4_local_paths(opened_files: &mut [P4OpenedFile], cwd: Option<&str>) -> Result<(), String> {
+fn populate_p4_local_paths(
+    opened_files: &mut [P4OpenedFile],
+    cwd: Option<&str>,
+    client: Option<&str>,
+) -> Result<(), String> {
     let depot_paths = opened_files
         .iter()
         .map(|file| file.depot_path.clone())
@@ -630,7 +665,7 @@ fn populate_p4_local_paths(opened_files: &mut [P4OpenedFile], cwd: Option<&str>)
         return Ok(());
     }
 
-    let local_paths = resolve_p4_local_paths(&depot_paths, cwd)?;
+    let local_paths = resolve_p4_local_paths(&depot_paths, cwd, client)?;
     for file in opened_files.iter_mut() {
         file.local_path = local_paths.get(&file.depot_path).cloned();
     }
@@ -640,10 +675,11 @@ fn populate_p4_local_paths(opened_files: &mut [P4OpenedFile], cwd: Option<&str>)
 fn resolve_p4_local_paths(
     depot_paths: &[String],
     cwd: Option<&str>,
+    client: Option<&str>,
 ) -> Result<HashMap<String, String>, String> {
     let mut args = vec!["where".to_string()];
     args.extend(depot_paths.iter().cloned());
-    let output = run_command_owned("p4", &args, cwd)?;
+    let output = run_p4_owned(&args, cwd, client)?;
     let mut mapping = HashMap::new();
 
     for line in output.lines() {
@@ -665,8 +701,8 @@ fn git_show_file(repo_path: &str, rel_path: &str) -> Result<String, String> {
     run_command("git", &["-C", repo_path, "show", &format!("HEAD:{}", rel_path)], None)
 }
 
-fn p4_print_file(path: &str, cwd: Option<&str>) -> Result<String, String> {
-    run_command("p4", &["print", "-q", path], cwd)
+fn p4_print_file(path: &str, cwd: Option<&str>, client: Option<&str>) -> Result<String, String> {
+    run_p4_owned(&["print".to_string(), "-q".to_string(), path.to_string()], cwd, client)
 }
 
 pub fn parse_p4_opened(output: &str) -> Vec<P4OpenedFile> {
@@ -690,6 +726,7 @@ pub fn parse_p4_opened(output: &str) -> Vec<P4OpenedFile> {
                 depot_path,
                 action,
                 change,
+                client: parse_p4_client(right),
                 local_path: None,
             })
         })
@@ -736,9 +773,38 @@ fn first_p4_description_line(output: &str) -> Option<String> {
     None
 }
 
+fn parse_p4_describe_client(output: &str) -> Option<String> {
+    output
+        .lines()
+        .next()
+        .and_then(|line| line.split(" by ").nth(1))
+        .and_then(|tail| tail.split('@').nth(1))
+        .and_then(|tail| tail.split_whitespace().next())
+        .map(|client| client.to_string())
+}
+
+fn parse_p4_client(right_segment: &str) -> Option<String> {
+    right_segment
+        .split(" by ")
+        .nth(1)
+        .and_then(|tail| tail.split_whitespace().next())
+        .and_then(|user_client| user_client.split_once('@'))
+        .map(|(_, client)| client.to_string())
+}
+
 fn run_command(program: &str, args: &[&str], cwd: Option<&str>) -> Result<String, String> {
     let args = args.iter().map(|arg| arg.to_string()).collect::<Vec<_>>();
     run_command_owned(program, &args, cwd)
+}
+
+fn run_p4_owned(args: &[String], cwd: Option<&str>, client: Option<&str>) -> Result<String, String> {
+    let mut full_args = Vec::new();
+    if let Some(client) = client.filter(|value| !value.trim().is_empty()) {
+        full_args.push("-c".to_string());
+        full_args.push(client.to_string());
+    }
+    full_args.extend(args.iter().cloned());
+    run_command_owned("p4", &full_args, cwd)
 }
 
 fn run_command_owned(program: &str, args: &[String], cwd: Option<&str>) -> Result<String, String> {
@@ -835,12 +901,14 @@ mod tests {
                     depot_path: "//depot/main/a.cpp".to_string(),
                     action: "edit".to_string(),
                     change: "default".to_string(),
+                    client: None,
                     local_path: None,
                 },
                 P4OpenedFile {
                     depot_path: "//depot/main/b.cpp".to_string(),
                     action: "add".to_string(),
                     change: "12345".to_string(),
+                    client: None,
                     local_path: None,
                 },
             ]
