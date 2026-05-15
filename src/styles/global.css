@@ -595,15 +595,15 @@ html, body, #root {
 }
 
 .monaco-editor .diff-line-del {
-  background: var(--del-bg);
+  background: color-mix(in srgb, var(--del-bg) 90%, transparent);
 }
 
 .monaco-editor .diff-line-del-empty {
-  background: var(--del-bg);
+  background: color-mix(in srgb, var(--del-bg) 90%, transparent);
 }
 
 .monaco-editor .diff-line-add {
-  background: var(--add-bg);
+  background: color-mix(in srgb, var(--add-bg) 92%, transparent);
 }
 
 .monaco-editor .diff-line-del-anchor {
@@ -615,6 +615,16 @@ html, body, #root {
 }
 
 .monaco-editor .merge-line-del-marker {
+  border-left: 3px solid #f14c4c;
+  margin-left: 3px;
+}
+
+.monaco-editor .diff-gutter-add {
+  border-left: 3px solid #2ea043;
+  margin-left: 3px;
+}
+
+.monaco-editor .diff-gutter-del {
   border-left: 3px solid #f14c4c;
   margin-left: 3px;
 }

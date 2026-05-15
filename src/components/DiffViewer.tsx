@@ -241,6 +241,7 @@ function buildDecorations(rows: AlignmentRow[], side: "left" | "right", monaco: 
         options: {
           isWholeLine: true,
           className,
+          linesDecorationsClassName: gutterClassForRow(row, side),
         },
       };
     })
@@ -257,4 +258,16 @@ function decorationClassForRow(row: AlignmentRow, side: "left" | "right") {
   }
 
   return `diff-line-${kind}`;
+}
+
+function gutterClassForRow(row: AlignmentRow, side: "left" | "right") {
+  const cell = side === "left" ? row.left : row.right;
+  const kind = cell?.kind;
+
+  if (side === "right" && kind === "empty" && row.left?.kind === "del") {
+    return "diff-gutter-del";
+  }
+  if (kind === "add") return "diff-gutter-add";
+  if (kind === "del") return "diff-gutter-del";
+  return undefined;
 }

@@ -9,6 +9,7 @@ import {
 import type { FileDiff, MergeBuffer } from "../types";
 
 type ParsedHunk = {
+  lines: Array<{ kind: "context" | "add" | "del"; text: string }>;
   old_count: number;
   new_start: number;
   new_count: number;
@@ -312,59 +313,75 @@ function buildMergeDecorations(hunksJson: string, mergedText: string) {
       options: Record<string, unknown>;
     }> = [];
 
-    const hasNewLines = hunk.new_count > 0;
-    const startLine = clampLine(hunk.new_start, lineCount);
-    const endLine = clampLine(hunk.new_start + Math.max(hunk.new_count - 1, 0), lineCount);
-    const markerStart = hasNewLines ? startLine : clampLine(hunk.new_start, lineCount);
-    const markerEnd = hasNewLines ? endLine : markerStart;
+    let currentLine = hunk.new_start;
+    let pendingDeletionCount = 0;
 
-    if (hasNewLines) {
-      decorations.push({
-        range: {
-          startLineNumber: startLine,
-          startColumn: 1,
-          endLineNumber: endLine,
-          endColumn: 1,
-        },
-        options: {
-          isWholeLine: true,
-          className: "diff-line-add",
-        },
-      });
-    }
+    for (const line of hunk.lines ?? []) {
+      if (line.kind === "context") {
+        if (pendingDeletionCount > 0) {
+          decorations.push(deletionMarkerDecoration(currentLine, lineCount, false));
+          pendingDeletionCount = 0;
+        }
+        currentLine += 1;
+        continue;
+      }
 
-    if (hunk.old_count > 0) {
-      decorations.push({
-        range: {
-          startLineNumber: markerStart,
-          startColumn: 1,
-          endLineNumber: markerEnd,
-          endColumn: 1,
-        },
-        options: {
-          isWholeLine: true,
-          linesDecorationsClassName: "merge-line-del-marker",
-        },
-      });
+      if (line.kind === "del") {
+        pendingDeletionCount += 1;
+        continue;
+      }
 
-      if (!hasNewLines) {
+      if (line.kind === "add") {
         decorations.push({
           range: {
-            startLineNumber: markerStart,
+            startLineNumber: clampLine(currentLine, lineCount),
             startColumn: 1,
-            endLineNumber: markerStart,
+            endLineNumber: clampLine(currentLine, lineCount),
             endColumn: 1,
           },
           options: {
             isWholeLine: true,
-            className: "diff-line-del-anchor",
+            className: "diff-line-add",
+            linesDecorationsClassName: "diff-gutter-add",
           },
         });
+
+        if (pendingDeletionCount > 0) {
+          decorations.push(deletionMarkerDecoration(currentLine, lineCount, false));
+          pendingDeletionCount = 0;
+        }
+
+        currentLine += 1;
       }
+    }
+
+    if (pendingDeletionCount > 0 || (hunk.old_count > 0 && hunk.new_count === 0)) {
+      decorations.push(deletionMarkerDecoration(currentLine, lineCount, true));
     }
 
     return decorations;
   });
+}
+
+function deletionMarkerDecoration(
+  lineNumber: number,
+  lineCount: number,
+  useAnchorBackground: boolean
+) {
+  const anchorLine = clampLine(lineNumber, lineCount);
+  return {
+    range: {
+      startLineNumber: anchorLine,
+      startColumn: 1,
+      endLineNumber: anchorLine,
+      endColumn: 1,
+    },
+    options: {
+      isWholeLine: true,
+      linesDecorationsClassName: "merge-line-del-marker",
+      className: useAnchorBackground ? "diff-line-del-anchor" : undefined,
+    },
+  };
 }
 
 function parseHunks(hunksJson: string): ParsedHunk[] {
