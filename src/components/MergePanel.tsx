@@ -8,6 +8,12 @@ import {
 } from "../editorPreferences";
 import type { FileDiff, MergeBuffer } from "../types";
 
+type ParsedHunk = {
+  old_count: number;
+  new_start: number;
+  new_count: number;
+};
+
 interface Props {
   fileDiff: FileDiff;
   visible: boolean;
@@ -40,6 +46,7 @@ export default function MergePanel({
   const [showEditorSettings, setShowEditorSettings] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<any>(null);
+  const mergeDecorationIdsRef = useRef<string[]>([]);
   const suppressScrollSyncRef = useRef(false);
   const lastReportedTopLineRef = useRef(1);
   const lastFocusedFileRef = useRef<string | null>(null);
@@ -83,6 +90,14 @@ export default function MergePanel({
       editorRef.current.revealLineNearTop(syncedTopLine);
     });
   }, [syncToken, syncedTopLine, visible]);
+
+  useEffect(() => {
+    if (!visible || !editorRef.current) return;
+    mergeDecorationIdsRef.current = editorRef.current.deltaDecorations(
+      mergeDecorationIdsRef.current,
+      buildMergeDecorations(fileDiff.hunks_json, mergedText)
+    );
+  }, [fileDiff.hunks_json, mergedText, visible]);
 
   const handleSave = async () => {
     try {
@@ -282,6 +297,87 @@ function clampTabSize(value: string) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 2;
   return Math.min(8, Math.max(2, Math.round(numeric)));
+}
+
+function buildMergeDecorations(hunksJson: string, mergedText: string) {
+  const lineCount = Math.max(1, mergedText.split("\n").length);
+  return parseHunks(hunksJson).flatMap((hunk) => {
+    const decorations: Array<{
+      range: {
+        startLineNumber: number;
+        startColumn: number;
+        endLineNumber: number;
+        endColumn: number;
+      };
+      options: Record<string, unknown>;
+    }> = [];
+
+    const hasNewLines = hunk.new_count > 0;
+    const startLine = clampLine(hunk.new_start, lineCount);
+    const endLine = clampLine(hunk.new_start + Math.max(hunk.new_count - 1, 0), lineCount);
+    const markerStart = hasNewLines ? startLine : clampLine(hunk.new_start, lineCount);
+    const markerEnd = hasNewLines ? endLine : markerStart;
+
+    if (hasNewLines) {
+      decorations.push({
+        range: {
+          startLineNumber: startLine,
+          startColumn: 1,
+          endLineNumber: endLine,
+          endColumn: 1,
+        },
+        options: {
+          isWholeLine: true,
+          className: "diff-line-add",
+        },
+      });
+    }
+
+    if (hunk.old_count > 0) {
+      decorations.push({
+        range: {
+          startLineNumber: markerStart,
+          startColumn: 1,
+          endLineNumber: markerEnd,
+          endColumn: 1,
+        },
+        options: {
+          isWholeLine: true,
+          linesDecorationsClassName: "merge-line-del-marker",
+        },
+      });
+
+      if (!hasNewLines) {
+        decorations.push({
+          range: {
+            startLineNumber: markerStart,
+            startColumn: 1,
+            endLineNumber: markerStart,
+            endColumn: 1,
+          },
+          options: {
+            isWholeLine: true,
+            className: "diff-line-del-anchor",
+          },
+        });
+      }
+    }
+
+    return decorations;
+  });
+}
+
+function parseHunks(hunksJson: string): ParsedHunk[] {
+  try {
+    const parsed = JSON.parse(hunksJson);
+    return Array.isArray(parsed) ? (parsed as ParsedHunk[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function clampLine(lineNumber: number, lineCount: number) {
+  return Math.min(Math.max(lineNumber || 1, 1), lineCount);
 }
 
 function extractText(json: string): string {

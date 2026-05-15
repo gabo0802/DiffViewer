@@ -598,10 +598,23 @@ html, body, #root {
   background: var(--del-bg);
 }
 
+.monaco-editor .diff-line-del-empty {
+  background: var(--del-bg);
+}
+
 .monaco-editor .diff-line-add {
   background: var(--add-bg);
 }
 
+.monaco-editor .diff-line-del-anchor {
+  background: color-mix(in srgb, var(--del-bg) 75%, transparent);
+}
+
 .monaco-editor .diff-line-empty {
   background: var(--empty-row-bg);
+}
+
+.monaco-editor .merge-line-del-marker {
+  border-left: 3px solid #f14c4c;
+  margin-left: 3px;
 }

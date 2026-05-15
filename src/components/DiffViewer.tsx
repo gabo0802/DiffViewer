@@ -234,16 +234,27 @@ function withSuppressedScroll(flagRef: React.MutableRefObject<boolean>, fn: () =
 function buildDecorations(rows: AlignmentRow[], side: "left" | "right", monaco: any) {
   return rows
     .map((row, index) => {
-      const cell = side === "left" ? row.left : row.right;
-      const kind = cell?.kind;
-      if (!kind || kind === "context") return null;
+      const className = decorationClassForRow(row, side);
+      if (!className) return null;
       return {
         range: new monaco.Range(index + 1, 1, index + 1, 1),
         options: {
           isWholeLine: true,
-          className: `diff-line-${kind}`,
+          className,
         },
       };
     })
     .filter(Boolean);
+}
+
+function decorationClassForRow(row: AlignmentRow, side: "left" | "right") {
+  const cell = side === "left" ? row.left : row.right;
+  const kind = cell?.kind;
+  if (!kind || kind === "context") return null;
+
+  if (side === "right" && kind === "empty" && row.left?.kind === "del") {
+    return "diff-line-del-empty";
+  }
+
+  return `diff-line-${kind}`;
 }
