@@ -1,12 +1,19 @@
 import React, { useEffect, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import * as api from "../api";
+import {
+  LANGUAGE_OPTIONS,
+  resolveEditorLanguage,
+  type EditorPreferences,
+} from "../editorPreferences";
 import type { FileDiff, MergeBuffer } from "../types";
 
 interface Props {
   fileDiff: FileDiff;
   visible: boolean;
   onToggle: () => void;
+  editorPreferences: EditorPreferences;
+  onEditorPreferencesChange: React.Dispatch<React.SetStateAction<EditorPreferences>>;
   initialFocusLine: number;
   onScrollLineChange?: (topLine: number) => void;
   syncedTopLine?: number | null;
@@ -17,6 +24,8 @@ export default function MergePanel({
   fileDiff,
   visible,
   onToggle,
+  editorPreferences,
+  onEditorPreferencesChange,
   initialFocusLine,
   onScrollLineChange,
   syncedTopLine = null,
@@ -26,6 +35,7 @@ export default function MergePanel({
   const [mergedText, setMergedText] = useState("");
   const [height, setHeight] = useState(320);
   const [isResizing, setIsResizing] = useState(false);
+  const [showEditorSettings, setShowEditorSettings] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<any>(null);
   const suppressScrollSyncRef = useRef(false);
@@ -34,6 +44,7 @@ export default function MergePanel({
   const lastAppliedSyncTokenRef = useRef(0);
   const startYRef = useRef(0);
   const startHeightRef = useRef(320);
+  const editorLanguage = resolveEditorLanguage(fileDiff, editorPreferences);
 
   useEffect(() => {
     if (visible) {
@@ -101,6 +112,16 @@ export default function MergePanel({
     }
   };
 
+  const handleFormat = async () => {
+    if (!editorRef.current) return;
+    try {
+      await editorRef.current.getAction("editor.action.formatDocument")?.run();
+    } catch (error) {
+      console.error(error);
+      alert(`Format failed: ${String(error)}`);
+    }
+  };
+
   useEffect(() => {
     if (!isResizing) return;
 
@@ -136,14 +157,88 @@ export default function MergePanel({
       <div className="merge-toolbar">
         <span className="merge-title">Merged Output</span>
         <span className="merge-dirty">{buffer?.dirty ? "* unsaved" : ""}</span>
+        <span className="merge-language">{editorLanguage}</span>
+        <button type="button" onClick={handleFormat}>Format</button>
+        <button
+          type="button"
+          onClick={() => setShowEditorSettings((current) => !current)}
+        >
+          Editor
+        </button>
         <button type="button" onClick={handleSave}>Save</button>
         <button type="button" onClick={handleSaveAs}>Save As</button>
         <button type="button" onClick={onToggle}>Close</button>
       </div>
+      {showEditorSettings && (
+        <div className="editor-settings-panel">
+          <label className="editor-settings-field">
+            <span>Language</span>
+            <select
+              value={editorPreferences.languageOverride}
+              onChange={(event) =>
+                onEditorPreferencesChange((current) => ({
+                  ...current,
+                  languageOverride: event.target.value,
+                }))
+              }
+            >
+              {LANGUAGE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="editor-settings-field">
+            <span>Tab size</span>
+            <input
+              type="number"
+              min={2}
+              max={8}
+              value={editorPreferences.tabSize}
+              onChange={(event) =>
+                onEditorPreferencesChange((current) => ({
+                  ...current,
+                  tabSize: clampTabSize(event.target.value),
+                }))
+              }
+            />
+          </label>
+          <label className="editor-settings-field editor-settings-checkbox">
+            <input
+              type="checkbox"
+              checked={editorPreferences.insertSpaces}
+              onChange={(event) =>
+                onEditorPreferencesChange((current) => ({
+                  ...current,
+                  insertSpaces: event.target.checked,
+                }))
+              }
+            />
+            <span>Insert spaces</span>
+          </label>
+          <label className="editor-settings-field">
+            <span>Word wrap</span>
+            <select
+              value={editorPreferences.wordWrap}
+              onChange={(event) =>
+                onEditorPreferencesChange((current) => ({
+                  ...current,
+                  wordWrap: event.target.value as EditorPreferences["wordWrap"],
+                }))
+              }
+            >
+              <option value="off">Off</option>
+              <option value="on">On</option>
+              <option value="bounded">Bounded</option>
+            </select>
+          </label>
+        </div>
+      )}
       <div className="merge-editor-wrap">
         <Editor
           height="100%"
-          defaultLanguage="text"
+          language={editorLanguage}
           value={mergedText}
           onChange={(value) => setMergedText(value ?? "")}
           onMount={(editor) => {
@@ -162,6 +257,9 @@ export default function MergePanel({
             scrollBeyondLastLine: false,
             inlineSuggest: { enabled: true },
             suggest: { preview: true },
+            tabSize: editorPreferences.tabSize,
+            insertSpaces: editorPreferences.insertSpaces,
+            wordWrap: editorPreferences.wordWrap,
           }}
         />
       </div>
@@ -175,6 +273,12 @@ function withSuppressedScroll(flagRef: React.MutableRefObject<boolean>, fn: () =
   window.requestAnimationFrame(() => {
     flagRef.current = false;
   });
+}
+
+function clampTabSize(value: string) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 2;
+  return Math.min(8, Math.max(2, Math.round(numeric)));
 }
 
 function extractText(json: string): string {

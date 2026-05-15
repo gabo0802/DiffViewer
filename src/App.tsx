@@ -2,9 +2,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Sidebar from "./components/Sidebar";
 import DiffViewer from "./components/DiffViewer";
 import MergePanel from "./components/MergePanel";
+import {
+  loadEditorPreferences,
+  type EditorPreferences,
+} from "./editorPreferences";
 import type { FileDiff, RenderedDiffModel } from "./types";
 
 const SIDEBAR_WIDTH_KEY = "diffviewer.sidebarWidth";
+const EDITOR_PREFERENCES_KEY = "diffviewer.editorPreferences";
 
 export default function App() {
   const [tabs, setTabs] = useState<FileDiff[]>([]);
@@ -14,6 +19,9 @@ export default function App() {
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [renderedModel, setRenderedModel] = useState<RenderedDiffModel | null>(null);
   const [syncSignal, setSyncSignal] = useState<ScrollSyncSignal | null>(null);
+  const [editorPreferences, setEditorPreferences] = useState<EditorPreferences>(() =>
+    loadEditorPreferences(EDITOR_PREFERENCES_KEY)
+  );
   const sidebarStartX = useRef(0);
   const sidebarStartWidth = useRef(sidebarWidth);
 
@@ -51,6 +59,10 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth));
   }, [sidebarWidth]);
+
+  useEffect(() => {
+    window.localStorage.setItem(EDITOR_PREFERENCES_KEY, JSON.stringify(editorPreferences));
+  }, [editorPreferences]);
 
   useEffect(() => {
     setRenderedModel(null);
@@ -164,6 +176,7 @@ export default function App() {
             {currentFd ? (
               <DiffViewer
                 fileDiff={currentFd}
+                editorPreferences={editorPreferences}
                 onModelChange={handleRenderedModelChange}
                 onScrollRowChange={handleDiffScroll}
                 syncedTopRow={syncSignal?.source === "merge" ? syncSignal.diffTopRow : null}
@@ -181,6 +194,8 @@ export default function App() {
               fileDiff={currentFd}
               visible={mergeVisible}
               onToggle={() => setMergeVisible(false)}
+              editorPreferences={editorPreferences}
+              onEditorPreferencesChange={setEditorPreferences}
               initialFocusLine={firstChangedMergeLine}
               onScrollLineChange={handleMergeScroll}
               syncedTopLine={syncSignal?.source === "diff" ? syncSignal.mergeTopLine : null}

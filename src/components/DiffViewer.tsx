@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import * as api from "../api";
+import { resolveEditorLanguage, type EditorPreferences } from "../editorPreferences";
 import type { FileDiff, RenderedDiffModel, AlignmentRow } from "../types";
 
 interface Props {
   fileDiff: FileDiff;
+  editorPreferences: EditorPreferences;
   onModelChange?: (model: RenderedDiffModel | null) => void;
   onScrollRowChange?: (topRow: number) => void;
   syncedTopRow?: number | null;
@@ -13,6 +15,7 @@ interface Props {
 
 export default function DiffViewer({
   fileDiff,
+  editorPreferences,
   onModelChange,
   onScrollRowChange,
   syncedTopRow = null,
@@ -27,6 +30,7 @@ export default function DiffViewer({
   const suppressScrollSyncRef = useRef(false);
   const lastReportedTopRowRef = useRef(1);
   const lastAppliedSyncTokenRef = useRef(0);
+  const editorLanguage = resolveEditorLanguage(fileDiff, editorPreferences);
 
   useEffect(() => {
     setModel(null);
@@ -173,7 +177,7 @@ export default function DiffViewer({
               <Editor
                 key={`left-${fileDiff.filediff_id}-${model.rows.length}`}
                 height="100%"
-                defaultLanguage="text"
+                language={editorLanguage}
                 value={leftText}
                 onMount={decorateOnMount("left")}
                 options={{
@@ -182,6 +186,9 @@ export default function DiffViewer({
                   lineNumbers: "on",
                   scrollBeyondLastLine: false,
                   renderLineHighlight: "none",
+                  tabSize: editorPreferences.tabSize,
+                  insertSpaces: editorPreferences.insertSpaces,
+                  wordWrap: editorPreferences.wordWrap,
                 }}
               />
             </div>
@@ -190,7 +197,7 @@ export default function DiffViewer({
               <Editor
                 key={`right-${fileDiff.filediff_id}-${model.rows.length}`}
                 height="100%"
-                defaultLanguage="text"
+                language={editorLanguage}
                 value={rightText}
                 onMount={decorateOnMount("right")}
                 options={{
@@ -199,6 +206,9 @@ export default function DiffViewer({
                   lineNumbers: "on",
                   scrollBeyondLastLine: false,
                   renderLineHighlight: "none",
+                  tabSize: editorPreferences.tabSize,
+                  insertSpaces: editorPreferences.insertSpaces,
+                  wordWrap: editorPreferences.wordWrap,
                 }}
               />
             </div>
