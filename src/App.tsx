@@ -1,13 +1,19 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import DiffViewer from "./components/DiffViewer";
 import MergePanel from "./components/MergePanel";
 import type { FileDiff } from "./types";
 
+const SIDEBAR_WIDTH_KEY = "diffviewer.sidebarWidth";
+
 export default function App() {
   const [tabs, setTabs] = useState<FileDiff[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [mergeVisible, setMergeVisible] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => readStoredSidebarWidth());
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const sidebarStartX = useRef(0);
+  const sidebarStartWidth = useRef(sidebarWidth);
 
   const openFileDiff = (fd: FileDiff) => {
     if (!tabs.find((t) => t.filediff_id === fd.filediff_id)) {
@@ -36,9 +42,45 @@ export default function App() {
 
   const currentFd = tabs.find((t) => t.filediff_id === activeTab) ?? null;
 
+  useEffect(() => {
+    window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth));
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    if (!isResizingSidebar) return;
+
+    const onMouseMove = (event: MouseEvent) => {
+      const delta = event.clientX - sidebarStartX.current;
+      const nextWidth = clamp(sidebarStartWidth.current + delta, 220, 520);
+      setSidebarWidth(nextWidth);
+    };
+
+    const onMouseUp = () => setIsResizingSidebar(false);
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [isResizingSidebar]);
+
+  const beginSidebarResize = (event: React.MouseEvent<HTMLDivElement>) => {
+    sidebarStartX.current = event.clientX;
+    sidebarStartWidth.current = sidebarWidth;
+    setIsResizingSidebar(true);
+  };
+
   return (
     <div className="app-root">
-      <Sidebar onSelectFileDiff={openFileDiff} />
+      <div className="sidebar-shell" style={{ width: sidebarWidth }}>
+        <Sidebar onSelectFileDiff={openFileDiff} />
+      </div>
+      <div
+        className={`sidebar-resizer ${isResizingSidebar ? "sidebar-resizer-active" : ""}`}
+        onMouseDown={beginSidebarResize}
+        title="Drag to resize sidebar"
+      />
 
       <main className="main">
         <div className="tab-bar">
@@ -98,4 +140,15 @@ export default function App() {
       </main>
     </div>
   );
+}
+
+function readStoredSidebarWidth() {
+  const raw = window.localStorage.getItem(SIDEBAR_WIDTH_KEY);
+  if (!raw) return 260;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? clamp(parsed, 220, 520) : 260;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }

@@ -31,11 +31,39 @@ html, body, #root {
   height: 100vh;
 }
 
+.sidebar-shell {
+  flex: 0 0 auto;
+  min-width: 220px;
+  max-width: 520px;
+  min-height: 0;
+}
+
+.sidebar-resizer {
+  flex: 0 0 6px;
+  cursor: ew-resize;
+  background: transparent;
+  position: relative;
+}
+
+.sidebar-resizer::before {
+  content: "";
+  position: absolute;
+  inset: 0 2px;
+  background: var(--border);
+  opacity: 0.35;
+}
+
+.sidebar-resizer:hover::before,
+.sidebar-resizer-active::before {
+  opacity: 0.9;
+  background: var(--accent);
+}
+
 /* ── Sidebar ── */
 
 .sidebar {
-  width: 260px;
-  min-width: 200px;
+  width: 100%;
+  min-width: 0;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--border);
   display: flex;
