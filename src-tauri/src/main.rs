@@ -121,6 +121,22 @@ fn list_filediffs(state: State<AppState>, diffset_id: String) -> Result<Vec<stor
 }
 
 #[tauri::command]
+fn refresh_workspace_diffsets(state: State<AppState>, workspace_id: String) -> Result<Vec<store::DiffSet>, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let diffsets = store::list_diffsets(&conn, &workspace_id)?;
+    for diffset in &diffsets {
+        let _ = scm::refresh_diffset(&conn, &diffset.diffset_id)?;
+    }
+    store::list_diffsets(&conn, &workspace_id)
+}
+
+#[tauri::command]
+fn delete_diffset(state: State<AppState>, diffset_id: String) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    store::delete_diffset(&conn, &diffset_id)
+}
+
+#[tauri::command]
 fn get_rendered_diff(state: State<AppState>, filediff_id: String) -> Result<diff_engine::render::RenderedDiffModel, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let fd = store::get_filediff(&conn, &filediff_id)?;
@@ -410,6 +426,8 @@ fn main() {
             import_p4_submitted,
             list_diffsets,
             list_filediffs,
+            refresh_workspace_diffsets,
+            delete_diffset,
             get_rendered_diff,
             mark_reviewed,
             init_mergebuffer,

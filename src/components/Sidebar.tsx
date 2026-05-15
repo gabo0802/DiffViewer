@@ -26,8 +26,10 @@ export default function Sidebar({ onSelectFileDiff }: Props) {
   const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadDiffsets = useCallback(async (ws: Workspace) => {
-    const next = await api.listDiffsets(ws.workspace_id);
+  const loadDiffsets = useCallback(async (ws: Workspace, refreshLive = false) => {
+    const next = refreshLive
+      ? await api.refreshWorkspaceDiffsets(ws.workspace_id)
+      : await api.listDiffsets(ws.workspace_id);
     setDiffsets(next);
   }, []);
 
@@ -110,13 +112,48 @@ export default function Sidebar({ onSelectFileDiff }: Props) {
     }
   };
 
+  const removeDiffset = async (diffsetId: string) => {
+    setError(null);
+    try {
+      await api.deleteDiffset(diffsetId);
+      setFilediffs((prev) => {
+        const next = { ...prev };
+        delete next[diffsetId];
+        return next;
+      });
+      if (expanded === diffsetId) {
+        setExpanded(null);
+      }
+      if (workspace) {
+        await loadDiffsets(workspace);
+      }
+    } catch (err) {
+      setError(String(err));
+    }
+  };
+
+  const refreshFromSidebar = async () => {
+    if (!workspace) return;
+    setError(null);
+    try {
+      await loadDiffsets(workspace, true);
+      setFilediffs({});
+      if (expanded) {
+        const fds = await api.listFilediffs(expanded);
+        setFilediffs((prev) => ({ ...prev, [expanded]: fds }));
+      }
+    } catch (err) {
+      setError(String(err));
+    }
+  };
+
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
         <span className="sidebar-title">{workspace?.name ?? "Loading..."}</span>
         <button
           className="icon-button"
-          onClick={() => workspace && loadDiffsets(workspace)}
+          onClick={refreshFromSidebar}
           title="Refresh diffsets"
         >
           Refresh
@@ -150,6 +187,7 @@ export default function Sidebar({ onSelectFileDiff }: Props) {
               filediffs={filediffs[ds.diffset_id]}
               onToggle={() => toggleDiffset(ds.diffset_id)}
               onSelectFileDiff={onSelectFileDiff}
+              onRemove={() => removeDiffset(ds.diffset_id)}
             />
           ))}
         </section>
@@ -164,12 +202,14 @@ function DiffSetRow({
   filediffs,
   onToggle,
   onSelectFileDiff,
+  onRemove,
 }: {
   diffset: DiffSet;
   expanded: boolean;
   filediffs?: FileDiff[];
   onToggle: () => void;
   onSelectFileDiff: (fd: FileDiff) => void;
+  onRemove: () => void;
 }) {
   const meta = parseMeta(diffset.source_meta_json);
   const isP4 = diffset.provider === "p4";
@@ -177,16 +217,29 @@ function DiffSetRow({
 
   return (
     <div className="sidebar-diffset">
-      <button className="sidebar-diffset-btn" onClick={onToggle}>
-        <span className="chevron">{expanded ? "v" : ">"}</span>
-        <span className="diffset-title">
-          {isP4 && meta.change ? `CL ${meta.change}` : diffset.title}
-          {isP4 && <small>{diffset.title}</small>}
-        </span>
-        <span className={`diffset-type badge badge-${diffset.provider}`}>
-          {statusLabel(diffset, meta)}
-        </span>
-      </button>
+      <div className="sidebar-diffset-row">
+        <button className="sidebar-diffset-btn" onClick={onToggle}>
+          <span className="chevron">{expanded ? "v" : ">"}</span>
+          <span className="diffset-title">
+            {isP4 && meta.change ? `CL ${meta.change}` : diffset.title}
+            {isP4 && <small>{diffset.title}</small>}
+          </span>
+          <span className={`diffset-type badge badge-${diffset.provider}`}>
+            {statusLabel(diffset, meta)}
+          </span>
+        </button>
+        <button
+          type="button"
+          className="sidebar-diffset-close"
+          title={`Remove ${diffset.title}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onRemove();
+          }}
+        >
+          x
+        </button>
+      </div>
       <div className="diffset-meta">
         {meta.user || meta.client ? <span>{[meta.user, meta.client].filter(Boolean).join("@")}</span> : null}
         {meta.repo_path ? <span>{meta.repo_path}</span> : null}

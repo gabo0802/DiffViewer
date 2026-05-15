@@ -45,6 +45,33 @@ pub fn import_git_working_tree(
     )
 }
 
+pub fn refresh_diffset(conn: &Connection, diffset_id: &str) -> Result<bool, String> {
+    let diffset = store::get_diffset(conn, diffset_id)?;
+    let meta: serde_json::Value =
+        serde_json::from_str(&diffset.source_meta_json).map_err(|e| e.to_string())?;
+
+    match diffset.kind.as_str() {
+        "gitWorkingTree" => {
+            let repo_path = meta
+                .get("repo_path")
+                .and_then(|value| value.as_str())
+                .ok_or("Missing repo_path for git working tree diffset")?;
+            replace_git_working_tree(conn, &diffset, repo_path)?;
+            Ok(true)
+        }
+        "p4Pending" | "p4PendingDefault" => {
+            let change = meta
+                .get("change")
+                .and_then(|value| value.as_str())
+                .ok_or("Missing change for p4 pending diffset")?;
+            let cwd = meta.get("cwd").and_then(|value| value.as_str());
+            replace_p4_pending(conn, &diffset, change, cwd)?;
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
+}
+
 pub fn import_git_commit(
     conn: &Connection,
     workspace_id: &str,
@@ -230,6 +257,83 @@ fn import_p4_describe(
     )
 }
 
+fn replace_git_working_tree(conn: &Connection, diffset: &DiffSet, repo_path: &str) -> Result<(), String> {
+    let output = run_command(
+        "git",
+        &["-C", repo_path, "diff", "--no-color", "--no-ext-diff", "--unified=3"],
+        None,
+    )?;
+    let title = format!("Git working tree: {}", display_repo_name(repo_path));
+    replace_diffset_contents(
+        conn,
+        diffset,
+        &output,
+        DiffSetDescriptor {
+            title,
+            source_type: "Git".to_string(),
+            provider: "git".to_string(),
+            kind: "gitWorkingTree".to_string(),
+            source_meta: serde_json::json!({
+                "repo_path": repo_path,
+                "file_count": unified_parser::parse_unified_diff(&output).len()
+            }),
+            left_label: "HEAD".to_string(),
+            right_label: "working tree".to_string(),
+            write_target: serde_json::json!({ "type": "save_as_required" }),
+        },
+        None,
+    )
+}
+
+fn replace_p4_pending(
+    conn: &Connection,
+    diffset: &DiffSet,
+    change: &str,
+    cwd: Option<&str>,
+) -> Result<(), String> {
+    let opened = run_command("p4", &["opened", "-c", change], cwd)?;
+    let opened_files = parse_p4_opened(&opened);
+    let mut args: Vec<String> = vec!["diff".to_string(), "-du".to_string()];
+    args.extend(opened_files.iter().map(|file| file.depot_path.clone()));
+    let diff = if opened_files.is_empty() {
+        String::new()
+    } else {
+        run_command_owned("p4", &args, cwd)?
+    };
+    let title = if change == "default" {
+        "P4 default pending changelist".to_string()
+    } else {
+        format!("P4 pending changelist {}", change)
+    };
+    let action_map = opened_files
+        .iter()
+        .map(|file| (strip_p4_rev(&file.depot_path), file.action.clone()))
+        .collect::<HashMap<_, _>>();
+    replace_diffset_contents(
+        conn,
+        diffset,
+        &diff,
+        DiffSetDescriptor {
+            title,
+            source_type: "Perforce".to_string(),
+            provider: "p4".to_string(),
+            kind: if change == "default" { "p4PendingDefault" } else { "p4Pending" }.to_string(),
+            source_meta: serde_json::json!({
+                "change": change,
+                "status": if change == "default" { "Default" } else { "Pending" },
+                "file_count": opened_files.len(),
+                "cwd": cwd
+            }),
+            left_label: "have revision".to_string(),
+            right_label: "workspace".to_string(),
+            write_target: serde_json::json!({ "type": "save_as_required" }),
+        },
+        Some(&action_map),
+    )?;
+    add_opened_files_without_diffs(conn, &diffset.diffset_id, &opened_files)?;
+    Ok(())
+}
+
 struct DiffSetDescriptor {
     title: String,
     source_type: String,
@@ -280,6 +384,53 @@ fn import_unified_diff_text(
     }
 
     Ok(diffset_id)
+}
+
+fn replace_diffset_contents(
+    conn: &Connection,
+    diffset: &DiffSet,
+    diff_text: &str,
+    descriptor: DiffSetDescriptor,
+    action_by_path: Option<&HashMap<String, String>>,
+) -> Result<(), String> {
+    let parsed = unified_parser::parse_unified_diff(diff_text);
+    let DiffSetDescriptor {
+        title,
+        source_type,
+        provider,
+        kind,
+        source_meta,
+        left_label,
+        right_label,
+        write_target,
+    } = descriptor;
+    let updated = DiffSet {
+        diffset_id: diffset.diffset_id.clone(),
+        workspace_id: diffset.workspace_id.clone(),
+        title,
+        source_type,
+        provider,
+        kind,
+        source_meta_json: source_meta.to_string(),
+        created_at: diffset.created_at,
+    };
+    store::update_diffset(conn, &updated)?;
+    store::delete_filediffs_for_diffset(conn, &diffset.diffset_id)?;
+
+    for pf in &parsed {
+        insert_patch_file_diff(
+            conn,
+            &diffset.diffset_id,
+            pf,
+            &left_label,
+            &right_label,
+            write_target.clone(),
+            action_by_path,
+            chrono::Utc::now().timestamp(),
+        )?;
+    }
+
+    Ok(())
 }
 
 fn insert_patch_file_diff(

@@ -183,10 +183,54 @@ pub fn list_diffsets(conn: &Connection, workspace_id: &str) -> Result<Vec<DiffSe
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
+pub fn get_diffset(conn: &Connection, diffset_id: &str) -> Result<DiffSet, String> {
+    conn.query_row(
+        "SELECT diffset_id, workspace_id, title, source_type, provider, kind, source_meta_json, created_at FROM diffsets WHERE diffset_id = ?1",
+        params![diffset_id],
+        |row| {
+            Ok(DiffSet {
+                diffset_id: row.get(0)?,
+                workspace_id: row.get(1)?,
+                title: row.get(2)?,
+                source_type: row.get(3)?,
+                provider: row.get(4)?,
+                kind: row.get(5)?,
+                source_meta_json: row.get(6)?,
+                created_at: row.get(7)?,
+            })
+        },
+    )
+    .map_err(|e| e.to_string())
+}
+
+pub fn update_diffset(conn: &Connection, ds: &DiffSet) -> Result<(), String> {
+    conn.execute(
+        "UPDATE diffsets SET title = ?2, source_type = ?3, provider = ?4, kind = ?5, source_meta_json = ?6 WHERE diffset_id = ?1",
+        params![ds.diffset_id, ds.title, ds.source_type, ds.provider, ds.kind, ds.source_meta_json],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 pub fn insert_filediff(conn: &Connection, fd: &FileDiff) -> Result<(), String> {
     conn.execute(
         "INSERT INTO filediffs (filediff_id, diffset_id, display_path, status, left_label, right_label, content_left_json, content_right_json, hunks_json, write_target_json, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
         params![fd.filediff_id, fd.diffset_id, fd.display_path, fd.status, fd.left_label, fd.right_label, fd.content_left_json, fd.content_right_json, fd.hunks_json, fd.write_target_json, fd.created_at],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn delete_filediffs_for_diffset(conn: &Connection, diffset_id: &str) -> Result<(), String> {
+    conn.execute(
+        "DELETE FROM merge_buffers WHERE filediff_id IN (SELECT filediff_id FROM filediffs WHERE diffset_id = ?1)",
+        params![diffset_id],
+    ).map_err(|e| e.to_string())?;
+    conn.execute(
+        "DELETE FROM review_state WHERE filediff_id IN (SELECT filediff_id FROM filediffs WHERE diffset_id = ?1)",
+        params![diffset_id],
+    ).map_err(|e| e.to_string())?;
+    conn.execute(
+        "DELETE FROM filediffs WHERE diffset_id = ?1",
+        params![diffset_id],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -272,6 +316,15 @@ pub fn insert_snapshot(conn: &Connection, snap: &Snapshot) -> Result<(), String>
     conn.execute(
         "INSERT OR IGNORE INTO snapshots (snapshot_id, sha256, size_bytes, cache_path, created_at) VALUES (?1,?2,?3,?4,?5)",
         params![snap.snapshot_id, snap.sha256, snap.size_bytes, snap.cache_path, snap.created_at],
+    ).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn delete_diffset(conn: &Connection, diffset_id: &str) -> Result<(), String> {
+    delete_filediffs_for_diffset(conn, diffset_id)?;
+    conn.execute(
+        "DELETE FROM diffsets WHERE diffset_id = ?1",
+        params![diffset_id],
     ).map_err(|e| e.to_string())?;
     Ok(())
 }

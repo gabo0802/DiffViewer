@@ -52,6 +52,12 @@ export const listDiffsets = (workspaceId: string) =>
 export const listFilediffs = (diffsetId: string) =>
   invoke<FileDiff[]>("list_filediffs", { diffsetId });
 
+export const refreshWorkspaceDiffsets = (workspaceId: string) =>
+  invoke<DiffSet[]>("refresh_workspace_diffsets", { workspaceId });
+
+export const deleteDiffset = (diffsetId: string) =>
+  invoke<void>("delete_diffset", { diffsetId });
+
 export const getRenderedDiff = (filediffId: string) =>
   invoke<RenderedDiffModel>("get_rendered_diff", { filediffId });
 

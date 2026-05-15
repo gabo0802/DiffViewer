@@ -118,6 +118,7 @@ html, body, #root {
   align-items: center;
   gap: 6px;
   width: 100%;
+  min-width: 0;
   padding: 6px 16px;
   background: none;
   border: none;
@@ -127,6 +128,26 @@ html, body, #root {
   font-size: 13px;
 }
 .sidebar-diffset-btn:hover { background: rgba(255,255,255,0.05); }
+
+.sidebar-diffset-row {
+  display: flex;
+  align-items: stretch;
+}
+
+.sidebar-diffset-close {
+  flex: 0 0 auto;
+  width: 28px;
+  border: none;
+  border-left: 1px solid rgba(255,255,255,0.04);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+}
+.sidebar-diffset-close:hover {
+  color: var(--text);
+  background: rgba(255,255,255,0.08);
+}
 
 .chevron { font-size: 10px; width: 12px; }
 .diffset-title {
