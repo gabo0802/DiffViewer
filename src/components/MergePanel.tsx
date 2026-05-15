@@ -7,14 +7,31 @@ interface Props {
   fileDiff: FileDiff;
   visible: boolean;
   onToggle: () => void;
+  initialFocusLine: number;
+  onScrollLineChange?: (topLine: number) => void;
+  syncedTopLine?: number | null;
+  syncToken?: number;
 }
 
-export default function MergePanel({ fileDiff, visible, onToggle }: Props) {
+export default function MergePanel({
+  fileDiff,
+  visible,
+  onToggle,
+  initialFocusLine,
+  onScrollLineChange,
+  syncedTopLine = null,
+  syncToken = 0,
+}: Props) {
   const [buffer, setBuffer] = useState<MergeBuffer | null>(null);
   const [mergedText, setMergedText] = useState("");
   const [height, setHeight] = useState(320);
   const [isResizing, setIsResizing] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const editorRef = useRef<any>(null);
+  const suppressScrollSyncRef = useRef(false);
+  const lastReportedTopLineRef = useRef(1);
+  const lastFocusedFileRef = useRef<string | null>(null);
+  const lastAppliedSyncTokenRef = useRef(0);
   const startYRef = useRef(0);
   const startHeightRef = useRef(320);
 
@@ -29,6 +46,30 @@ export default function MergePanel({ fileDiff, visible, onToggle }: Props) {
         .catch(console.error);
     }
   }, [visible, fileDiff.filediff_id]);
+
+  useEffect(() => {
+    if (!visible) {
+      lastFocusedFileRef.current = null;
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible || !editorRef.current) return;
+    if (lastFocusedFileRef.current === fileDiff.filediff_id) return;
+    lastFocusedFileRef.current = fileDiff.filediff_id;
+    withSuppressedScroll(suppressScrollSyncRef, () => {
+      editorRef.current.revealLineInCenter(initialFocusLine);
+    });
+  }, [fileDiff.filediff_id, initialFocusLine, visible]);
+
+  useEffect(() => {
+    if (!visible || !editorRef.current || !syncedTopLine || syncToken === 0) return;
+    if (lastAppliedSyncTokenRef.current === syncToken) return;
+    lastAppliedSyncTokenRef.current = syncToken;
+    withSuppressedScroll(suppressScrollSyncRef, () => {
+      editorRef.current.revealLineNearTop(syncedTopLine);
+    });
+  }, [syncToken, syncedTopLine, visible]);
 
   const handleSave = async () => {
     try {
@@ -105,6 +146,17 @@ export default function MergePanel({ fileDiff, visible, onToggle }: Props) {
           defaultLanguage="text"
           value={mergedText}
           onChange={(value) => setMergedText(value ?? "")}
+          onMount={(editor) => {
+            editorRef.current = editor;
+            editor.onDidScrollChange(() => {
+              if (suppressScrollSyncRef.current) return;
+              const topLine = editor.getVisibleRanges()?.[0]?.startLineNumber ?? 1;
+              if (topLine !== lastReportedTopLineRef.current) {
+                lastReportedTopLineRef.current = topLine;
+                onScrollLineChange?.(topLine);
+              }
+            });
+          }}
           options={{
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
@@ -115,6 +167,14 @@ export default function MergePanel({ fileDiff, visible, onToggle }: Props) {
       </div>
     </div>
   );
+}
+
+function withSuppressedScroll(flagRef: React.MutableRefObject<boolean>, fn: () => void) {
+  flagRef.current = true;
+  fn();
+  window.requestAnimationFrame(() => {
+    flagRef.current = false;
+  });
 }
 
 function extractText(json: string): string {

@@ -5,27 +5,45 @@ import type { FileDiff, RenderedDiffModel, AlignmentRow } from "../types";
 
 interface Props {
   fileDiff: FileDiff;
+  onModelChange?: (model: RenderedDiffModel | null) => void;
+  onScrollRowChange?: (topRow: number) => void;
+  syncedTopRow?: number | null;
+  syncToken?: number;
 }
 
-export default function DiffViewer({ fileDiff }: Props) {
+export default function DiffViewer({
+  fileDiff,
+  onModelChange,
+  onScrollRowChange,
+  syncedTopRow = null,
+  syncToken = 0,
+}: Props) {
   const [model, setModel] = useState<RenderedDiffModel | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [currentHunkIdx, setCurrentHunkIdx] = useState(0);
   const leftEditorRef = useRef<any>(null);
   const rightEditorRef = useRef<any>(null);
+  const monacoRef = useRef<any>(null);
+  const suppressScrollSyncRef = useRef(false);
+  const lastReportedTopRowRef = useRef(1);
+  const lastAppliedSyncTokenRef = useRef(0);
 
   useEffect(() => {
     setModel(null);
+    onModelChange?.(null);
     setLoadError(null);
     api
       .getRenderedDiff(fileDiff.filediff_id)
-      .then(setModel)
+      .then((nextModel) => {
+        setModel(nextModel);
+        onModelChange?.(nextModel);
+      })
       .catch((err) => {
         console.error(err);
         setLoadError(String(err));
       });
     setCurrentHunkIdx(0);
-  }, [fileDiff.filediff_id]);
+  }, [fileDiff.filediff_id, onModelChange]);
 
   const leftText = model
     ? model.rows
@@ -55,15 +73,59 @@ export default function DiffViewer({ fileDiff }: Props) {
   useEffect(() => {
     if (!model || model.hunks.length === 0) return;
     const lineNumber = model.hunks[currentHunkIdx].start_row + 1;
-    leftEditorRef.current?.revealLineInCenter(lineNumber);
-    rightEditorRef.current?.revealLineInCenter(lineNumber);
+    revealAlignedLine(lineNumber);
   }, [model, currentHunkIdx]);
 
+  useEffect(() => {
+    if (!model || !monacoRef.current) return;
+    if (leftEditorRef.current) {
+      leftEditorRef.current.deltaDecorations([], buildDecorations(model.rows, "left", monacoRef.current));
+    }
+    if (rightEditorRef.current) {
+      rightEditorRef.current.deltaDecorations([], buildDecorations(model.rows, "right", monacoRef.current));
+    }
+  }, [model]);
+
+  useEffect(() => {
+    if (!syncedTopRow || !model || syncToken === 0) return;
+    if (lastAppliedSyncTokenRef.current === syncToken) return;
+    lastAppliedSyncTokenRef.current = syncToken;
+    withSuppressedScroll(suppressScrollSyncRef, () => {
+      revealAlignedLine(syncedTopRow, "nearTop");
+    });
+  }, [model, syncToken, syncedTopRow]);
+
   const decorateOnMount = (side: "left" | "right") => (editor: any, monaco: any) => {
+    monacoRef.current = monaco;
     if (side === "left") leftEditorRef.current = editor;
     if (side === "right") rightEditorRef.current = editor;
-    if (model) {
-      editor.deltaDecorations([], buildDecorations(model.rows, side, monaco));
+
+    editor.onDidScrollChange(() => {
+      if (suppressScrollSyncRef.current) return;
+      const otherEditor = side === "left" ? rightEditorRef.current : leftEditorRef.current;
+      if (otherEditor) {
+        withSuppressedScroll(suppressScrollSyncRef, () => {
+          otherEditor.setScrollTop(editor.getScrollTop());
+          otherEditor.setScrollLeft(editor.getScrollLeft());
+        });
+      }
+
+      const topRow = editor.getVisibleRanges()?.[0]?.startLineNumber ?? 1;
+      if (topRow !== lastReportedTopRowRef.current) {
+        lastReportedTopRowRef.current = topRow;
+        onScrollRowChange?.(topRow);
+      }
+    });
+  };
+
+  const revealAlignedLine = (lineNumber: number, position: "center" | "nearTop" = "center") => {
+    const editors = [leftEditorRef.current, rightEditorRef.current].filter(Boolean);
+    for (const editor of editors) {
+      if (position === "nearTop") {
+        editor.revealLineNearTop(lineNumber);
+      } else {
+        editor.revealLineInCenter(lineNumber);
+      }
     }
   };
 
@@ -145,6 +207,14 @@ export default function DiffViewer({ fileDiff }: Props) {
       </div>
     </div>
   );
+}
+
+function withSuppressedScroll(flagRef: React.MutableRefObject<boolean>, fn: () => void) {
+  flagRef.current = true;
+  fn();
+  window.requestAnimationFrame(() => {
+    flagRef.current = false;
+  });
 }
 
 function buildDecorations(rows: AlignmentRow[], side: "left" | "right", monaco: any) {
