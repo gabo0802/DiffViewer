@@ -13,6 +13,8 @@ export interface DiffSet {
   workspace_id: string;
   title: string;
   source_type: string;
+  provider: "git" | "p4" | "patch" | "external" | string;
+  kind: string;
   source_meta_json: string;
   created_at: number;
 }

@@ -29,6 +29,21 @@ export const importPatch = (path: string) =>
 export const compareTwoFiles = (leftPath: string, rightPath: string) =>
   invoke<string>("compare_two_files", { leftPath, rightPath });
 
+export const importGitWorkingTree = (repoPath: string) =>
+  invoke<string>("import_git_working_tree", { repoPath });
+
+export const importGitCommit = (repoPath: string, rev: string) =>
+  invoke<string>("import_git_commit", { repoPath, rev });
+
+export const importP4Pending = (change: string, cwd?: string) =>
+  invoke<string>("import_p4_pending", { change, cwd });
+
+export const importP4Shelved = (change: string, cwd?: string) =>
+  invoke<string>("import_p4_shelved", { change, cwd });
+
+export const importP4Submitted = (change: string, cwd?: string) =>
+  invoke<string>("import_p4_submitted", { change, cwd });
+
 // ── Diff access ──
 
 export const listDiffsets = (workspaceId: string) =>
