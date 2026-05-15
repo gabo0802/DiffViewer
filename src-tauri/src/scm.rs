@@ -19,6 +19,7 @@ struct P4Config {
     client: Option<String>,
     port: Option<String>,
     user: Option<String>,
+    charset: Option<String>,
     source_path: Option<PathBuf>,
 }
 
@@ -899,6 +900,7 @@ fn load_p4_config(cwd: Option<&str>) -> P4Config {
                         "P4CLIENT" => config.client = Some(value),
                         "P4PORT" => config.port = Some(value),
                         "P4USER" => config.user = Some(value),
+                        "P4CHARSET" => config.charset = Some(value),
                         _ => {}
                     }
                 }
@@ -923,6 +925,12 @@ fn apply_p4_config_env(cmd: &mut Command, p4_config: &P4Config) {
     if let Some(user) = p4_config.user.as_deref().filter(|value| !value.trim().is_empty()) {
         cmd.env("P4USER", user);
     }
+    let charset = p4_config
+        .charset
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("utf8");
+    cmd.env("P4CHARSET", charset);
 }
 
 fn run_command_owned(
