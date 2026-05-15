@@ -462,13 +462,13 @@ fn insert_patch_file_diff(
     now: i64,
 ) -> Result<(), String> {
     let hunks_json = serde_json::to_string(&pf.hunks).unwrap_or_else(|_| "[]".to_string());
-    let left_text = reconstruct_old_text(pf);
-    let right_text = reconstruct_new_text(pf);
     let display_path = display_path_for_patch(pf);
     let action = action_by_path
         .and_then(|map| map.get(&strip_p4_rev(&display_path)).cloned())
         .unwrap_or_else(|| pf.status.clone());
     let write_target = derive_write_target(write_target_mode, pf, &display_path);
+    let (content_left_json, content_right_json) =
+        derive_content_sources(write_target_mode, pf, &display_path)?;
 
     store::insert_filediff(
         conn,
@@ -479,13 +479,63 @@ fn insert_patch_file_diff(
             status: action,
             left_label: if left_label.is_empty() { pf.old_path.clone() } else { left_label.to_string() },
             right_label: if right_label.is_empty() { pf.new_path.clone() } else { right_label.to_string() },
-            content_left_json: serde_json::json!({ "type": "virtual", "text": left_text }).to_string(),
-            content_right_json: serde_json::json!({ "type": "virtual", "text": right_text }).to_string(),
+            content_left_json,
+            content_right_json,
             hunks_json,
             write_target_json: write_target.to_string(),
             created_at: now,
         },
     )
+}
+
+fn derive_content_sources(
+    mode: &WriteTargetMode,
+    pf: &PatchFileDiff,
+    display_path: &str,
+) -> Result<(String, String), String> {
+    match mode {
+        WriteTargetMode::SaveAsRequired => Ok((
+            serde_json::json!({ "type": "virtual", "text": reconstruct_old_text(pf) }).to_string(),
+            serde_json::json!({ "type": "virtual", "text": reconstruct_new_text(pf) }).to_string(),
+        )),
+        WriteTargetMode::GitWorkingTree { repo_path } => {
+            let old_rel = if pf.old_path != "/dev/null" { pf.old_path.as_str() } else { display_path };
+            let right_abs = Path::new(repo_path).join(display_path);
+            let left_text = if pf.old_path == "/dev/null" {
+                String::new()
+            } else {
+                git_show_file(repo_path, old_rel)?
+            };
+            let right_json = if pf.new_path == "/dev/null" || !right_abs.exists() {
+                serde_json::json!({ "type": "virtual", "text": reconstruct_new_text(pf) }).to_string()
+            } else {
+                serde_json::json!({ "type": "path", "path": right_abs.to_string_lossy() }).to_string()
+            };
+            Ok((
+                serde_json::json!({ "type": "virtual", "text": left_text }).to_string(),
+                right_json,
+            ))
+        }
+        WriteTargetMode::P4Pending { cwd } => {
+            let left_json = if pf.old_path == "/dev/null" {
+                serde_json::json!({ "type": "virtual", "text": "" }).to_string()
+            } else if pf.old_path.starts_with("//") {
+                serde_json::json!({ "type": "virtual", "text": p4_print_file(&pf.old_path, cwd.as_deref())? }).to_string()
+            } else {
+                serde_json::json!({ "type": "virtual", "text": reconstruct_old_text(pf) }).to_string()
+            };
+            let right_json = if let Some(local_path) = pending_local_path(pf, cwd.as_deref()) {
+                if Path::new(&local_path).exists() {
+                    serde_json::json!({ "type": "path", "path": local_path }).to_string()
+                } else {
+                    serde_json::json!({ "type": "virtual", "text": reconstruct_new_text(pf) }).to_string()
+                }
+            } else {
+                serde_json::json!({ "type": "virtual", "text": reconstruct_new_text(pf) }).to_string()
+            };
+            Ok((left_json, right_json))
+        }
+    }
 }
 
 fn derive_write_target(
@@ -609,6 +659,14 @@ fn resolve_p4_local_paths(
     }
 
     Ok(mapping)
+}
+
+fn git_show_file(repo_path: &str, rel_path: &str) -> Result<String, String> {
+    run_command("git", &["-C", repo_path, "show", &format!("HEAD:{}", rel_path)], None)
+}
+
+fn p4_print_file(path: &str, cwd: Option<&str>) -> Result<String, String> {
+    run_command("p4", &["print", "-q", path], cwd)
 }
 
 pub fn parse_p4_opened(output: &str) -> Vec<P4OpenedFile> {
