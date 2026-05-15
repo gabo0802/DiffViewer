@@ -130,9 +130,15 @@ pub fn import_p4_pending(
     change: &str,
     cwd: Option<&str>,
 ) -> Result<String, String> {
+    eprintln!("[p4-debug] import_p4_pending change={:?} cwd={:?}", change, cwd);
     let opened = run_command("p4", &["opened", "-a", "-c", change], cwd)?;
     let mut opened_files = parse_p4_opened(&opened);
     let client = opened_files.iter().find_map(|file| file.client.clone());
+    eprintln!(
+        "[p4-debug] import_p4_pending opened_files={} client={:?}",
+        opened_files.len(),
+        client
+    );
     populate_p4_local_paths(&mut opened_files, cwd, client.as_deref())?;
     let diff = collect_pending_p4_diff(&opened_files, cwd, client.as_deref())?;
     let title = if change == "default" {
@@ -180,8 +186,14 @@ pub fn import_p4_shelved(
     change: &str,
     cwd: Option<&str>,
 ) -> Result<String, String> {
+    eprintln!("[p4-debug] import_p4_shelved change={:?} cwd={:?}", change, cwd);
     let output = run_command("p4", &["describe", "-S", "-du", change], cwd)?;
     let actions = parse_p4_describe_actions(&output);
+    eprintln!(
+        "[p4-debug] import_p4_shelved describe_actions={} output_len={}",
+        actions.len(),
+        output.len()
+    );
     import_p4_describe(
         conn,
         workspace_id,
@@ -203,8 +215,14 @@ pub fn import_p4_submitted(
     change: &str,
     cwd: Option<&str>,
 ) -> Result<String, String> {
+    eprintln!("[p4-debug] import_p4_submitted change={:?} cwd={:?}", change, cwd);
     let output = run_command("p4", &["describe", "-du", change], cwd)?;
     let actions = parse_p4_describe_actions(&output);
+    eprintln!(
+        "[p4-debug] import_p4_submitted describe_actions={} output_len={}",
+        actions.len(),
+        output.len()
+    );
     import_p4_describe(
         conn,
         workspace_id,
@@ -300,9 +318,20 @@ fn replace_p4_pending(
     change: &str,
     cwd: Option<&str>,
 ) -> Result<(), String> {
+    eprintln!(
+        "[p4-debug] replace_p4_pending diffset_id={} change={:?} cwd={:?}",
+        diffset.diffset_id,
+        change,
+        cwd
+    );
     let opened = run_command("p4", &["opened", "-a", "-c", change], cwd)?;
     let mut opened_files = parse_p4_opened(&opened);
     let client = opened_files.iter().find_map(|file| file.client.clone());
+    eprintln!(
+        "[p4-debug] replace_p4_pending opened_files={} client={:?}",
+        opened_files.len(),
+        client
+    );
     populate_p4_local_paths(&mut opened_files, cwd, client.as_deref())?;
     let diff = collect_pending_p4_diff(&opened_files, cwd, client.as_deref())?;
     let title = if change == "default" {
@@ -369,6 +398,13 @@ fn import_unified_diff_text(
     action_by_path: Option<&HashMap<String, String>>,
 ) -> Result<String, String> {
     let parsed = unified_parser::parse_unified_diff(diff_text);
+    eprintln!(
+        "[p4-debug] import_unified_diff_text provider={} kind={} parsed_files={} diff_len={}",
+        descriptor.provider,
+        descriptor.kind,
+        parsed.len(),
+        diff_text.len()
+    );
     let now = chrono::Utc::now().timestamp();
     let diffset_id = uuid::Uuid::new_v4().to_string();
 
@@ -410,6 +446,14 @@ fn replace_diffset_contents(
     action_by_path: Option<&HashMap<String, String>>,
 ) -> Result<(), String> {
     let parsed = unified_parser::parse_unified_diff(diff_text);
+    eprintln!(
+        "[p4-debug] replace_diffset_contents diffset_id={} provider={} kind={} parsed_files={} diff_len={}",
+        diffset.diffset_id,
+        descriptor.provider,
+        descriptor.kind,
+        parsed.len(),
+        diff_text.len()
+    );
     let DiffSetDescriptor {
         title,
         source_type,
@@ -693,10 +737,22 @@ fn collect_pending_p4_diff(
     client: Option<&str>,
 ) -> Result<String, String> {
     let mut sections = Vec::new();
-    for chunk in opened_files.chunks(24) {
+    for (index, chunk) in opened_files.chunks(24).enumerate() {
+        eprintln!(
+            "[p4-debug] collect_pending_p4_diff chunk={} files={} cwd={:?} client={:?}",
+            index,
+            chunk.len(),
+            cwd,
+            client
+        );
         let mut args = vec!["diff".to_string(), "-du".to_string()];
         args.extend(chunk.iter().map(|file| file.depot_path.clone()));
         let output = run_p4_owned(&args, cwd, client)?;
+        eprintln!(
+            "[p4-debug] collect_pending_p4_diff chunk={} output_len={}",
+            index,
+            output.len()
+        );
         if !output.trim().is_empty() {
             sections.push(output);
         }
@@ -815,6 +871,14 @@ fn run_p4_owned(args: &[String], cwd: Option<&str>, client: Option<&str>) -> Res
 }
 
 fn run_command_owned(program: &str, args: &[String], cwd: Option<&str>) -> Result<String, String> {
+    if program == "p4" {
+        eprintln!(
+            "[p4-debug] command={} cwd={:?} args={}",
+            program,
+            cwd,
+            args.join(" ")
+        );
+    }
     let mut cmd = Command::new(program);
     cmd.args(args);
     if let Some(cwd) = cwd.filter(|value| !value.trim().is_empty()) {
@@ -823,6 +887,17 @@ fn run_command_owned(program: &str, args: &[String], cwd: Option<&str>) -> Resul
     let output = cmd
         .output()
         .map_err(|e| format!("Failed to run {}: {}", program, e))?;
+    if program == "p4" {
+        eprintln!("[p4-debug] status={}", output.status);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !stdout.trim().is_empty() {
+            eprintln!("[p4-debug] stdout:\n{}", stdout);
+        }
+        if !stderr.trim().is_empty() {
+            eprintln!("[p4-debug] stderr:\n{}", stderr);
+        }
+    }
     if !output.status.success() {
         return Err(format!(
             "{} {} failed: {}",
