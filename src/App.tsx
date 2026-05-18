@@ -16,6 +16,7 @@ export default function App() {
   const [tabs, setTabs] = useState<FileDiff[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [mergeVisible, setMergeVisible] = useState(false);
+  const [sidebarRefreshToken, setSidebarRefreshToken] = useState(0);
   const [sidebarWidth, setSidebarWidth] = useState(() => readStoredSidebarWidth());
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [renderedModel, setRenderedModel] = useState<RenderedDiffModel | null>(null);
@@ -141,10 +142,34 @@ export default function App() {
     [renderedModel]
   );
 
+  const handleMergeSaveComplete = useCallback(async () => {
+    if (!currentFd) return;
+
+    const workspace = await api.getCurrentWorkspace();
+    await api.refreshWorkspaceDiffsets(workspace.workspace_id);
+    const refreshedFilediffs = await api.listFilediffs(currentFd.diffset_id);
+    const replacement =
+      refreshedFilediffs.find((fd) => fd.display_path === currentFd.display_path) ?? null;
+
+    setSidebarRefreshToken(Date.now());
+
+    if (!replacement) {
+      setTabs((prev) => prev.filter((tab) => tab.filediff_id !== currentFd.filediff_id));
+      setActiveTab(null);
+      setMergeVisible(false);
+      return;
+    }
+
+    setTabs((prev) =>
+      prev.map((tab) => (tab.filediff_id === currentFd.filediff_id ? replacement : tab))
+    );
+    setActiveTab(replacement.filediff_id);
+  }, [currentFd]);
+
   return (
     <div className="app-root">
       <div className="sidebar-shell" style={{ width: sidebarWidth }}>
-        <Sidebar onSelectFileDiff={openFileDiff} />
+        <Sidebar onSelectFileDiff={openFileDiff} refreshToken={sidebarRefreshToken} />
       </div>
       <div
         className={`sidebar-resizer ${isResizingSidebar ? "sidebar-resizer-active" : ""}`}
@@ -219,6 +244,7 @@ export default function App() {
               fileDiff={currentFd}
               visible={mergeVisible}
               onToggle={() => setMergeVisible(false)}
+              onSaveComplete={handleMergeSaveComplete}
               editorPreferences={editorPreferences}
               theme={theme}
               onEditorPreferencesChange={setEditorPreferences}

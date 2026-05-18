@@ -19,6 +19,7 @@ interface Props {
   fileDiff: FileDiff;
   visible: boolean;
   onToggle: () => void;
+  onSaveComplete?: () => Promise<void> | void;
   editorPreferences: EditorPreferences;
   theme: "dark" | "light";
   onEditorPreferencesChange: React.Dispatch<React.SetStateAction<EditorPreferences>>;
@@ -32,6 +33,7 @@ export default function MergePanel({
   fileDiff,
   visible,
   onToggle,
+  onSaveComplete,
   editorPreferences,
   theme,
   onEditorPreferencesChange,
@@ -105,6 +107,7 @@ export default function MergePanel({
       await api.setMergebufferText(fileDiff.filediff_id, mergedText);
       await api.saveMergebuffer(fileDiff.filediff_id);
       setBuffer((prev) => (prev ? { ...prev, dirty: false } : prev));
+      await onSaveComplete?.();
     } catch (e: any) {
       const message = e?.toString?.() ?? String(e);
       if (message.toLowerCase().includes("save as required")) {
@@ -124,6 +127,7 @@ export default function MergePanel({
       await api.setMergebufferText(fileDiff.filediff_id, mergedText);
       await api.saveMergebufferAs(fileDiff.filediff_id, path);
       setBuffer((prev) => (prev ? { ...prev, dirty: false } : prev));
+      await onSaveComplete?.();
     } catch (e) {
       console.error(e);
       alert(`Save As failed: ${String(e)}`);

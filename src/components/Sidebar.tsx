@@ -5,6 +5,7 @@ import type { Workspace, DiffSet, FileDiff } from "../types";
 
 interface Props {
   onSelectFileDiff: (fd: FileDiff) => void;
+  refreshToken?: number;
 }
 
 type DiffSetMeta = {
@@ -19,7 +20,7 @@ type DiffSetMeta = {
 
 const PROVIDER_ORDER = ["p4", "git", "patch", "external"];
 
-export default function Sidebar({ onSelectFileDiff }: Props) {
+export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [diffsets, setDiffsets] = useState<DiffSet[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -51,6 +52,17 @@ export default function Sidebar({ onSelectFileDiff }: Props) {
       loadDiffsets(workspace).catch((err) => setError(String(err)));
     }
   }, [workspace, loadDiffsets]);
+
+  useEffect(() => {
+    if (!workspace || refreshToken === 0) return;
+    loadDiffsets(workspace, true)
+      .then(async () => {
+        if (!expanded) return;
+        const fds = await api.listFilediffs(expanded);
+        setFilediffs((prev) => ({ ...prev, [expanded]: fds }));
+      })
+      .catch((err) => setError(String(err)));
+  }, [expanded, loadDiffsets, refreshToken, workspace]);
 
   const grouped = useMemo(() => {
     const groups = new Map<string, DiffSet[]>();
