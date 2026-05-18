@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum OpenRequest {
-    OpenPatch { path: String },
+    OpenPatch {
+        path: String,
+    },
     OpenTwoWay {
         left_path: String,
         right_path: String,
@@ -18,7 +20,9 @@ pub enum OpenRequest {
         merged_path: String,
         title: Option<String>,
     },
-    OpenFiles { paths: Vec<String> },
+    OpenFiles {
+        paths: Vec<String>,
+    },
 }
 
 /// Parse command-line arguments into an OpenRequest.
@@ -35,6 +39,9 @@ pub fn parse_argv(args: &[String]) -> Option<OpenRequest> {
         let arg = &raw[i];
         match arg.as_str() {
             "--" => {
+                i += 1;
+            }
+            "--debug" => {
                 i += 1;
             }
             "--no-default-features" | "--release" => {
@@ -72,9 +79,12 @@ pub fn parse_argv(args: &[String]) -> Option<OpenRequest> {
                 .and_then(|i| args.get(i + 1))
                 .cloned()
         };
-        if let (Some(base), Some(local), Some(remote), Some(merged)) =
-            (get("--base"), get("--local"), get("--remote"), get("--merged"))
-        {
+        if let (Some(base), Some(local), Some(remote), Some(merged)) = (
+            get("--base"),
+            get("--local"),
+            get("--remote"),
+            get("--merged"),
+        ) {
             return Some(OpenRequest::OpenMerge {
                 base_path: base,
                 local_path: local,
@@ -87,7 +97,9 @@ pub fn parse_argv(args: &[String]) -> Option<OpenRequest> {
 
     // --open <path> (patch)
     if args.len() >= 2 && args[0] == "--open" {
-        return Some(OpenRequest::OpenPatch { path: args[1].clone() });
+        return Some(OpenRequest::OpenPatch {
+            path: args[1].clone(),
+        });
     }
 
     // Single file ending in .diff or .patch
@@ -117,4 +129,27 @@ pub fn parse_argv(args: &[String]) -> Option<OpenRequest> {
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ignores_debug_flag_when_parsing_argv() {
+        let args = vec![
+            "diffviewer.exe".to_string(),
+            "--debug".to_string(),
+            "--diff".to_string(),
+            "left.txt".to_string(),
+            "right.txt".to_string(),
+        ];
+
+        let request = parse_argv(&args);
+        assert!(matches!(
+            request,
+            Some(OpenRequest::OpenTwoWay { left_path, right_path, .. })
+            if left_path == "left.txt" && right_path == "right.txt"
+        ));
+    }
 }

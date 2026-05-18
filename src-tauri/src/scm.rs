@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::debugging::DebugLogger;
 use crate::diff_engine::unified_parser::{self, PatchFileDiff};
 use crate::store::{self, DiffSet, FileDiff};
 
@@ -30,7 +31,14 @@ pub fn import_git_working_tree(
 ) -> Result<String, String> {
     let output = run_command(
         "git",
-        &["-C", repo_path, "diff", "--no-color", "--no-ext-diff", "--unified=3"],
+        &[
+            "-C",
+            repo_path,
+            "diff",
+            "--no-color",
+            "--no-ext-diff",
+            "--unified=3",
+        ],
         None,
     )?;
     let title = format!("Git working tree: {}", display_repo_name(repo_path));
@@ -138,16 +146,20 @@ pub fn import_p4_pending(
     change: &str,
     cwd: Option<&str>,
 ) -> Result<String, String> {
-    eprintln!("[p4-debug] import_p4_pending change={:?} cwd={:?}", change, cwd);
+    let debug = DebugLogger::new("scm");
+    debug.log(format!(
+        "import_p4_pending change={:?} cwd={:?}",
+        change, cwd
+    ));
     let p4_config = load_p4_config(cwd);
-    eprintln!("[p4-debug] import_p4_pending config={:?}", p4_config);
+    debug.log(format!("import_p4_pending config={:?}", p4_config));
     let opened = run_p4(&opened_args(change, &p4_config), cwd, &p4_config)?;
     let mut opened_files = parse_p4_opened(&opened);
-    eprintln!(
-        "[p4-debug] import_p4_pending opened_files={} configured_client={:?}",
+    debug.log(format!(
+        "import_p4_pending opened_files={} configured_client={:?}",
         opened_files.len(),
         p4_config.client
-    );
+    ));
     populate_p4_local_paths(&mut opened_files, cwd, &p4_config)?;
     let diff = collect_pending_p4_diff(&opened_files, cwd, &p4_config)?;
     let title = if change == "default" {
@@ -167,7 +179,12 @@ pub fn import_p4_pending(
             title,
             source_type: "Perforce".to_string(),
             provider: "p4".to_string(),
-            kind: if change == "default" { "p4PendingDefault" } else { "p4Pending" }.to_string(),
+            kind: if change == "default" {
+                "p4PendingDefault"
+            } else {
+                "p4Pending"
+            }
+            .to_string(),
             source_meta: serde_json::json!({
                 "change": change,
                 "status": if change == "default" { "Default" } else { "Pending" },
@@ -195,16 +212,20 @@ pub fn import_p4_shelved(
     change: &str,
     cwd: Option<&str>,
 ) -> Result<String, String> {
-    eprintln!("[p4-debug] import_p4_shelved change={:?} cwd={:?}", change, cwd);
+    let debug = DebugLogger::new("scm");
+    debug.log(format!(
+        "import_p4_shelved change={:?} cwd={:?}",
+        change, cwd
+    ));
     let p4_config = load_p4_config(cwd);
-    eprintln!("[p4-debug] import_p4_shelved config={:?}", p4_config);
+    debug.log(format!("import_p4_shelved config={:?}", p4_config));
     let output = run_p4(&["describe", "-S", "-du", change], cwd, &p4_config)?;
     let actions = parse_p4_describe_actions(&output);
-    eprintln!(
-        "[p4-debug] import_p4_shelved describe_actions={} output_len={}",
+    debug.log(format!(
+        "import_p4_shelved describe_actions={} output_len={}",
         actions.len(),
         output.len()
-    );
+    ));
     import_p4_describe(
         conn,
         workspace_id,
@@ -226,16 +247,20 @@ pub fn import_p4_submitted(
     change: &str,
     cwd: Option<&str>,
 ) -> Result<String, String> {
-    eprintln!("[p4-debug] import_p4_submitted change={:?} cwd={:?}", change, cwd);
+    let debug = DebugLogger::new("scm");
+    debug.log(format!(
+        "import_p4_submitted change={:?} cwd={:?}",
+        change, cwd
+    ));
     let p4_config = load_p4_config(cwd);
-    eprintln!("[p4-debug] import_p4_submitted config={:?}", p4_config);
+    debug.log(format!("import_p4_submitted config={:?}", p4_config));
     let output = run_p4(&["describe", "-du", change], cwd, &p4_config)?;
     let actions = parse_p4_describe_actions(&output);
-    eprintln!(
-        "[p4-debug] import_p4_submitted describe_actions={} output_len={}",
+    debug.log(format!(
+        "import_p4_submitted describe_actions={} output_len={}",
         actions.len(),
         output.len()
-    );
+    ));
     import_p4_describe(
         conn,
         workspace_id,
@@ -295,10 +320,21 @@ fn import_p4_describe(
     )
 }
 
-fn replace_git_working_tree(conn: &Connection, diffset: &DiffSet, repo_path: &str) -> Result<(), String> {
+fn replace_git_working_tree(
+    conn: &Connection,
+    diffset: &DiffSet,
+    repo_path: &str,
+) -> Result<(), String> {
     let output = run_command(
         "git",
-        &["-C", repo_path, "diff", "--no-color", "--no-ext-diff", "--unified=3"],
+        &[
+            "-C",
+            repo_path,
+            "diff",
+            "--no-color",
+            "--no-ext-diff",
+            "--unified=3",
+        ],
         None,
     )?;
     let title = format!("Git working tree: {}", display_repo_name(repo_path));
@@ -331,21 +367,20 @@ fn replace_p4_pending(
     change: &str,
     cwd: Option<&str>,
 ) -> Result<(), String> {
-    eprintln!(
-        "[p4-debug] replace_p4_pending diffset_id={} change={:?} cwd={:?}",
-        diffset.diffset_id,
-        change,
-        cwd
-    );
+    let debug = DebugLogger::new("scm");
+    debug.log(format!(
+        "replace_p4_pending diffset_id={} change={:?} cwd={:?}",
+        diffset.diffset_id, change, cwd
+    ));
     let p4_config = load_p4_config(cwd);
-    eprintln!("[p4-debug] replace_p4_pending config={:?}", p4_config);
+    debug.log(format!("replace_p4_pending config={:?}", p4_config));
     let opened = run_p4(&opened_args(change, &p4_config), cwd, &p4_config)?;
     let mut opened_files = parse_p4_opened(&opened);
-    eprintln!(
-        "[p4-debug] replace_p4_pending opened_files={} configured_client={:?}",
+    debug.log(format!(
+        "replace_p4_pending opened_files={} configured_client={:?}",
         opened_files.len(),
         p4_config.client
-    );
+    ));
     populate_p4_local_paths(&mut opened_files, cwd, &p4_config)?;
     let diff = collect_pending_p4_diff(&opened_files, cwd, &p4_config)?;
     let title = if change == "default" {
@@ -365,7 +400,12 @@ fn replace_p4_pending(
             title,
             source_type: "Perforce".to_string(),
             provider: "p4".to_string(),
-            kind: if change == "default" { "p4PendingDefault" } else { "p4Pending" }.to_string(),
+            kind: if change == "default" {
+                "p4PendingDefault"
+            } else {
+                "p4Pending"
+            }
+            .to_string(),
             source_meta: serde_json::json!({
                 "change": change,
                 "status": if change == "default" { "Default" } else { "Pending" },
@@ -399,9 +439,17 @@ struct DiffSetDescriptor {
 #[derive(Clone)]
 enum WriteTargetMode {
     SaveAsRequired,
-    GitWorkingTree { repo_path: String },
-    P4Pending { cwd: Option<String>, config: P4Config },
-    P4ReadOnly { cwd: Option<String>, config: P4Config },
+    GitWorkingTree {
+        repo_path: String,
+    },
+    P4Pending {
+        cwd: Option<String>,
+        config: P4Config,
+    },
+    P4ReadOnly {
+        cwd: Option<String>,
+        config: P4Config,
+    },
 }
 
 fn import_unified_diff_text(
@@ -412,13 +460,13 @@ fn import_unified_diff_text(
     action_by_path: Option<&HashMap<String, String>>,
 ) -> Result<String, String> {
     let parsed = unified_parser::parse_unified_diff(diff_text);
-    eprintln!(
-        "[p4-debug] import_unified_diff_text provider={} kind={} parsed_files={} diff_len={}",
+    DebugLogger::new("scm").log(format!(
+        "import_unified_diff_text provider={} kind={} parsed_files={} diff_len={}",
         descriptor.provider,
         descriptor.kind,
         parsed.len(),
         diff_text.len()
-    );
+    ));
     let now = chrono::Utc::now().timestamp();
     let diffset_id = uuid::Uuid::new_v4().to_string();
 
@@ -460,14 +508,14 @@ fn replace_diffset_contents(
     action_by_path: Option<&HashMap<String, String>>,
 ) -> Result<(), String> {
     let parsed = unified_parser::parse_unified_diff(diff_text);
-    eprintln!(
-        "[p4-debug] replace_diffset_contents diffset_id={} provider={} kind={} parsed_files={} diff_len={}",
+    DebugLogger::new("scm").log(format!(
+        "replace_diffset_contents diffset_id={} provider={} kind={} parsed_files={} diff_len={}",
         diffset.diffset_id,
         descriptor.provider,
         descriptor.kind,
         parsed.len(),
         diff_text.len()
-    );
+    ));
     let DiffSetDescriptor {
         title,
         source_type,
@@ -525,6 +573,11 @@ fn insert_patch_file_diff(
     let write_target = derive_write_target(write_target_mode, pf, &display_path);
     let (content_left_json, content_right_json) =
         derive_content_sources(write_target_mode, pf, &display_path)?;
+    DebugLogger::new("scm").log_diff_line_counts(
+        &display_path,
+        &content_left_json,
+        &content_right_json,
+    );
 
     store::insert_filediff(
         conn,
@@ -533,8 +586,16 @@ fn insert_patch_file_diff(
             diffset_id: diffset_id.to_string(),
             display_path,
             status: action,
-            left_label: if left_label.is_empty() { pf.old_path.clone() } else { left_label.to_string() },
-            right_label: if right_label.is_empty() { pf.new_path.clone() } else { right_label.to_string() },
+            left_label: if left_label.is_empty() {
+                pf.old_path.clone()
+            } else {
+                left_label.to_string()
+            },
+            right_label: if right_label.is_empty() {
+                pf.new_path.clone()
+            } else {
+                right_label.to_string()
+            },
             content_left_json,
             content_right_json,
             hunks_json,
@@ -555,7 +616,11 @@ fn derive_content_sources(
             serde_json::json!({ "type": "virtual", "text": reconstruct_new_text(pf) }).to_string(),
         )),
         WriteTargetMode::GitWorkingTree { repo_path } => {
-            let old_rel = if pf.old_path != "/dev/null" { pf.old_path.as_str() } else { display_path };
+            let old_rel = if pf.old_path != "/dev/null" {
+                pf.old_path.as_str()
+            } else {
+                display_path
+            };
             let right_abs = Path::new(repo_path).join(display_path);
             let left_text = if pf.old_path == "/dev/null" {
                 String::new()
@@ -563,9 +628,11 @@ fn derive_content_sources(
                 git_show_file(repo_path, old_rel)?
             };
             let right_json = if pf.new_path == "/dev/null" || !right_abs.exists() {
-                serde_json::json!({ "type": "virtual", "text": reconstruct_new_text(pf) }).to_string()
+                serde_json::json!({ "type": "virtual", "text": reconstruct_new_text(pf) })
+                    .to_string()
             } else {
-                serde_json::json!({ "type": "path", "path": right_abs.to_string_lossy() }).to_string()
+                serde_json::json!({ "type": "path", "path": right_abs.to_string_lossy() })
+                    .to_string()
             };
             Ok((
                 serde_json::json!({ "type": "virtual", "text": left_text }).to_string(),
@@ -578,16 +645,19 @@ fn derive_content_sources(
             } else if pf.old_path.starts_with("//") {
                 serde_json::json!({ "type": "virtual", "text": p4_print_file(&pf.old_path, cwd.as_deref(), config)? }).to_string()
             } else {
-                serde_json::json!({ "type": "virtual", "text": reconstruct_old_text(pf) }).to_string()
+                serde_json::json!({ "type": "virtual", "text": reconstruct_old_text(pf) })
+                    .to_string()
             };
             let right_json = if let Some(local_path) = pending_local_path(pf, cwd.as_deref()) {
                 if Path::new(&local_path).exists() {
                     serde_json::json!({ "type": "path", "path": local_path }).to_string()
                 } else {
-                    serde_json::json!({ "type": "virtual", "text": reconstruct_new_text(pf) }).to_string()
+                    serde_json::json!({ "type": "virtual", "text": reconstruct_new_text(pf) })
+                        .to_string()
                 }
             } else {
-                serde_json::json!({ "type": "virtual", "text": reconstruct_new_text(pf) }).to_string()
+                serde_json::json!({ "type": "virtual", "text": reconstruct_new_text(pf) })
+                    .to_string()
             };
             Ok((left_json, right_json))
         }
@@ -683,13 +753,16 @@ fn add_opened_files_without_diffs(
                 left_label: "have revision".to_string(),
                 right_label: "workspace".to_string(),
                 content_left_json: serde_json::json!({ "type": "virtual", "text": "" }).to_string(),
-                content_right_json: serde_json::json!({ "type": "virtual", "text": "" }).to_string(),
+                content_right_json: serde_json::json!({ "type": "virtual", "text": "" })
+                    .to_string(),
                 hunks_json: "[]".to_string(),
                 write_target_json: file
                     .local_path
                     .as_ref()
                     .map(|path| serde_json::json!({ "type": "path", "path": path }).to_string())
-                    .unwrap_or_else(|| serde_json::json!({ "type": "save_as_required" }).to_string()),
+                    .unwrap_or_else(|| {
+                        serde_json::json!({ "type": "save_as_required" }).to_string()
+                    }),
                 created_at: now,
             },
         )?;
@@ -751,22 +824,23 @@ fn collect_pending_p4_diff(
     p4_config: &P4Config,
 ) -> Result<String, String> {
     let mut sections = Vec::new();
+    let debug = DebugLogger::new("scm");
     for (index, chunk) in opened_files.chunks(24).enumerate() {
-        eprintln!(
-            "[p4-debug] collect_pending_p4_diff chunk={} files={} cwd={:?} client={:?}",
+        debug.log(format!(
+            "collect_pending_p4_diff chunk={} files={} cwd={:?} client={:?}",
             index,
             chunk.len(),
             cwd,
             p4_config.client
-        );
+        ));
         let mut args = vec!["diff".to_string(), "-du".to_string()];
         args.extend(chunk.iter().map(|file| file.depot_path.clone()));
         let output = run_p4_owned(&args, cwd, p4_config)?;
-        eprintln!(
-            "[p4-debug] collect_pending_p4_diff chunk={} output_len={}",
+        debug.log(format!(
+            "collect_pending_p4_diff chunk={} output_len={}",
             index,
             output.len()
-        );
+        ));
         if !output.trim().is_empty() {
             sections.push(output);
         }
@@ -775,11 +849,19 @@ fn collect_pending_p4_diff(
 }
 
 fn git_show_file(repo_path: &str, rel_path: &str) -> Result<String, String> {
-    run_command("git", &["-C", repo_path, "show", &format!("HEAD:{}", rel_path)], None)
+    run_command(
+        "git",
+        &["-C", repo_path, "show", &format!("HEAD:{}", rel_path)],
+        None,
+    )
 }
 
 fn p4_print_file(path: &str, cwd: Option<&str>, p4_config: &P4Config) -> Result<String, String> {
-    run_p4_owned(&["print".to_string(), "-q".to_string(), path.to_string()], cwd, p4_config)
+    run_p4_owned(
+        &["print".to_string(), "-q".to_string(), path.to_string()],
+        cwd,
+        p4_config,
+    )
 }
 
 pub fn parse_p4_opened(output: &str) -> Vec<P4OpenedFile> {
@@ -788,7 +870,11 @@ pub fn parse_p4_opened(output: &str) -> Vec<P4OpenedFile> {
         .filter_map(|line| {
             let (left, right) = line.split_once(" - ")?;
             let depot_path = left.split('#').next().unwrap_or(left).trim().to_string();
-            let action = right.split_whitespace().next().unwrap_or("edit").to_string();
+            let action = right
+                .split_whitespace()
+                .next()
+                .unwrap_or("edit")
+                .to_string();
             let change = if right.contains(" default change") {
                 "default".to_string()
             } else {
@@ -859,7 +945,11 @@ fn run_p4(args: &[&str], cwd: Option<&str>, p4_config: &P4Config) -> Result<Stri
     run_p4_owned(&owned, cwd, p4_config)
 }
 
-fn run_p4_owned(args: &[String], cwd: Option<&str>, p4_config: &P4Config) -> Result<String, String> {
+fn run_p4_owned(
+    args: &[String],
+    cwd: Option<&str>,
+    p4_config: &P4Config,
+) -> Result<String, String> {
     let mut full_args = Vec::new();
     full_args.extend(args.iter().cloned());
     run_command_owned("p4", &full_args, cwd, Some(p4_config))
@@ -916,13 +1006,25 @@ fn load_p4_config(cwd: Option<&str>) -> P4Config {
 }
 
 fn apply_p4_config_env(cmd: &mut Command, p4_config: &P4Config) {
-    if let Some(client) = p4_config.client.as_deref().filter(|value| !value.trim().is_empty()) {
+    if let Some(client) = p4_config
+        .client
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
         cmd.env("P4CLIENT", client);
     }
-    if let Some(port) = p4_config.port.as_deref().filter(|value| !value.trim().is_empty()) {
+    if let Some(port) = p4_config
+        .port
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
         cmd.env("P4PORT", port);
     }
-    if let Some(user) = p4_config.user.as_deref().filter(|value| !value.trim().is_empty()) {
+    if let Some(user) = p4_config
+        .user
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
         cmd.env("P4USER", user);
     }
     let charset = p4_config
@@ -939,9 +1041,10 @@ fn run_command_owned(
     cwd: Option<&str>,
     p4_config: Option<&P4Config>,
 ) -> Result<String, String> {
+    let debug = DebugLogger::new("scm");
     if program == "p4" {
-        eprintln!(
-            "[p4-debug] command={} cwd={:?} args={} client={:?} port={:?} user={:?} config_path={:?}",
+        debug.log(format!(
+            "command={} cwd={:?} args={} client={:?} port={:?} user={:?} config_path={:?}",
             program,
             cwd,
             args.join(" "),
@@ -949,7 +1052,7 @@ fn run_command_owned(
             p4_config.and_then(|config| config.port.as_deref()),
             p4_config.and_then(|config| config.user.as_deref()),
             p4_config.and_then(|config| config.source_path.as_ref())
-        );
+        ));
     }
     let mut cmd = Command::new(program);
     cmd.args(args);
@@ -963,15 +1066,11 @@ fn run_command_owned(
         .output()
         .map_err(|e| format!("Failed to run {}: {}", program, e))?;
     if program == "p4" {
-        eprintln!("[p4-debug] status={}", output.status);
+        debug.log(format!("status={}", output.status));
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        if !stdout.trim().is_empty() {
-            eprintln!("[p4-debug] stdout:\n{}", stdout);
-        }
-        if !stderr.trim().is_empty() {
-            eprintln!("[p4-debug] stderr:\n{}", stderr);
-        }
+        debug.log_multiline("stdout", &stdout);
+        debug.log_multiline("stderr", &stderr);
     }
     if !output.status.success() {
         return Err(format!(

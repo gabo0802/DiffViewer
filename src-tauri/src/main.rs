@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod debugging;
 mod diff_engine;
 mod io;
 mod open_request;
@@ -7,9 +8,11 @@ mod scm;
 mod store;
 mod workspace_controller;
 
-use std::sync::Mutex;
 use rusqlite::Connection;
+use std::sync::Mutex;
 use tauri::State;
+
+use crate::debugging::DebugLogger;
 
 struct AppState {
     db: Mutex<Connection>,
@@ -22,7 +25,10 @@ struct AppState {
 #[tauri::command]
 fn get_current_workspace(state: State<AppState>) -> Result<store::Workspace, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
-    let ws_id = state.current_workspace_id.lock().map_err(|e| e.to_string())?;
+    let ws_id = state
+        .current_workspace_id
+        .lock()
+        .map_err(|e| e.to_string())?;
     conn.query_row(
         "SELECT workspace_id, name, created_at, last_opened_at, settings_json FROM workspaces WHERE workspace_id = ?1",
         rusqlite::params![*ws_id],
@@ -50,7 +56,10 @@ fn create_workspace(state: State<AppState>, name: String) -> Result<store::Works
 
 #[tauri::command]
 fn open_workspace(state: State<AppState>, id: String) -> Result<(), String> {
-    let mut ws_id = state.current_workspace_id.lock().map_err(|e| e.to_string())?;
+    let mut ws_id = state
+        .current_workspace_id
+        .lock()
+        .map_err(|e| e.to_string())?;
     *ws_id = id;
     Ok(())
 }
@@ -60,68 +69,118 @@ fn open_workspace(state: State<AppState>, id: String) -> Result<(), String> {
 #[tauri::command]
 fn import_patch(state: State<AppState>, path: String) -> Result<String, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
-    let ws_id = state.current_workspace_id.lock().map_err(|e| e.to_string())?;
+    let ws_id = state
+        .current_workspace_id
+        .lock()
+        .map_err(|e| e.to_string())?;
     workspace_controller::import_patch(&conn, &ws_id, &path)
 }
 
 #[tauri::command]
-fn compare_two_files(state: State<AppState>, left_path: String, right_path: String) -> Result<String, String> {
+fn compare_two_files(
+    state: State<AppState>,
+    left_path: String,
+    right_path: String,
+) -> Result<String, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
-    let ws_id = state.current_workspace_id.lock().map_err(|e| e.to_string())?;
+    let ws_id = state
+        .current_workspace_id
+        .lock()
+        .map_err(|e| e.to_string())?;
     workspace_controller::compare_two_files(&conn, &ws_id, &left_path, &right_path, None)
 }
 
 #[tauri::command]
 fn import_git_working_tree(state: State<AppState>, repo_path: String) -> Result<String, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
-    let ws_id = state.current_workspace_id.lock().map_err(|e| e.to_string())?;
+    let ws_id = state
+        .current_workspace_id
+        .lock()
+        .map_err(|e| e.to_string())?;
     scm::import_git_working_tree(&conn, &ws_id, &repo_path)
 }
 
 #[tauri::command]
-fn import_git_commit(state: State<AppState>, repo_path: String, rev: String) -> Result<String, String> {
+fn import_git_commit(
+    state: State<AppState>,
+    repo_path: String,
+    rev: String,
+) -> Result<String, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
-    let ws_id = state.current_workspace_id.lock().map_err(|e| e.to_string())?;
+    let ws_id = state
+        .current_workspace_id
+        .lock()
+        .map_err(|e| e.to_string())?;
     scm::import_git_commit(&conn, &ws_id, &repo_path, &rev)
 }
 
 #[tauri::command]
-fn import_p4_pending(state: State<AppState>, change: String, cwd: Option<String>) -> Result<String, String> {
+fn import_p4_pending(
+    state: State<AppState>,
+    change: String,
+    cwd: Option<String>,
+) -> Result<String, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
-    let ws_id = state.current_workspace_id.lock().map_err(|e| e.to_string())?;
+    let ws_id = state
+        .current_workspace_id
+        .lock()
+        .map_err(|e| e.to_string())?;
     scm::import_p4_pending(&conn, &ws_id, &change, cwd.as_deref())
 }
 
 #[tauri::command]
-fn import_p4_shelved(state: State<AppState>, change: String, cwd: Option<String>) -> Result<String, String> {
+fn import_p4_shelved(
+    state: State<AppState>,
+    change: String,
+    cwd: Option<String>,
+) -> Result<String, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
-    let ws_id = state.current_workspace_id.lock().map_err(|e| e.to_string())?;
+    let ws_id = state
+        .current_workspace_id
+        .lock()
+        .map_err(|e| e.to_string())?;
     scm::import_p4_shelved(&conn, &ws_id, &change, cwd.as_deref())
 }
 
 #[tauri::command]
-fn import_p4_submitted(state: State<AppState>, change: String, cwd: Option<String>) -> Result<String, String> {
+fn import_p4_submitted(
+    state: State<AppState>,
+    change: String,
+    cwd: Option<String>,
+) -> Result<String, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
-    let ws_id = state.current_workspace_id.lock().map_err(|e| e.to_string())?;
+    let ws_id = state
+        .current_workspace_id
+        .lock()
+        .map_err(|e| e.to_string())?;
     scm::import_p4_submitted(&conn, &ws_id, &change, cwd.as_deref())
 }
 
 // ΓöÇΓöÇ Diff access commands ΓöÇΓöÇ
 
 #[tauri::command]
-fn list_diffsets(state: State<AppState>, workspace_id: String) -> Result<Vec<store::DiffSet>, String> {
+fn list_diffsets(
+    state: State<AppState>,
+    workspace_id: String,
+) -> Result<Vec<store::DiffSet>, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     store::list_diffsets(&conn, &workspace_id)
 }
 
 #[tauri::command]
-fn list_filediffs(state: State<AppState>, diffset_id: String) -> Result<Vec<store::FileDiff>, String> {
+fn list_filediffs(
+    state: State<AppState>,
+    diffset_id: String,
+) -> Result<Vec<store::FileDiff>, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     store::list_filediffs(&conn, &diffset_id)
 }
 
 #[tauri::command]
-fn refresh_workspace_diffsets(state: State<AppState>, workspace_id: String) -> Result<Vec<store::DiffSet>, String> {
+fn refresh_workspace_diffsets(
+    state: State<AppState>,
+    workspace_id: String,
+) -> Result<Vec<store::DiffSet>, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let diffsets = store::list_diffsets(&conn, &workspace_id)?;
     for diffset in &diffsets {
@@ -137,7 +196,10 @@ fn delete_diffset(state: State<AppState>, diffset_id: String) -> Result<(), Stri
 }
 
 #[tauri::command]
-fn get_rendered_diff(state: State<AppState>, filediff_id: String) -> Result<diff_engine::render::RenderedDiffModel, String> {
+fn get_rendered_diff(
+    state: State<AppState>,
+    filediff_id: String,
+) -> Result<diff_engine::render::RenderedDiffModel, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let fd = store::get_filediff(&conn, &filediff_id)?;
 
@@ -148,31 +210,51 @@ fn get_rendered_diff(state: State<AppState>, filediff_id: String) -> Result<diff
         serde_json::from_str(&fd.hunks_json).unwrap_or_default();
 
     let rows = diff_engine::twoway::build_alignment_rows(&left_text, &right_text, &hunks);
-    Ok(diff_engine::render::build_rendered_model(&filediff_id, &rows))
+    Ok(diff_engine::render::build_rendered_model(
+        &filediff_id,
+        &rows,
+    ))
 }
 
 #[tauri::command]
-fn mark_reviewed(state: State<AppState>, filediff_id: String, reviewed: bool) -> Result<(), String> {
+fn mark_reviewed(
+    state: State<AppState>,
+    filediff_id: String,
+    reviewed: bool,
+) -> Result<(), String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().timestamp();
-    store::upsert_review_state(&conn, &store::ReviewState {
-        filediff_id,
-        reviewed,
-        last_view_mode: "sideBySide".to_string(),
-        last_scroll_pos: 0.0,
-        last_cursor_json: "{}".to_string(),
-        updated_at: now,
-    })
+    store::upsert_review_state(
+        &conn,
+        &store::ReviewState {
+            filediff_id,
+            reviewed,
+            last_view_mode: "sideBySide".to_string(),
+            last_scroll_pos: 0.0,
+            last_cursor_json: "{}".to_string(),
+            updated_at: now,
+        },
+    )
 }
 
 // ΓöÇΓöÇ Merge panel commands ΓöÇΓöÇ
 
 #[tauri::command]
-fn init_mergebuffer(state: State<AppState>, filediff_id: String) -> Result<store::MergeBuffer, String> {
+fn init_mergebuffer(
+    state: State<AppState>,
+    filediff_id: String,
+) -> Result<store::MergeBuffer, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let fd = store::get_filediff(&conn, &filediff_id)?;
     let right_text = resolve_content_source(&fd.content_right_json)?;
     let merged = diff_engine::merge::init_merge_buffer(&right_text);
+    let debug = DebugLogger::new("merge");
+    debug.log_diff_line_counts(
+        &fd.display_path,
+        &fd.content_left_json,
+        &fd.content_right_json,
+    );
+    debug.log_merge_line_count(&fd.display_path, &merged, "init");
     let now = chrono::Utc::now().timestamp();
     let mb = store::MergeBuffer {
         filediff_id: filediff_id.clone(),
@@ -199,14 +281,18 @@ fn apply_hunk_to_mergebuffer(
     let hunks: Vec<diff_engine::unified_parser::Hunk> =
         serde_json::from_str(&fd.hunks_json).unwrap_or_default();
 
-    let hunk = hunks.iter().find(|h| h.id == hunk_id)
+    let hunk = hunks
+        .iter()
+        .find(|h| h.id == hunk_id)
         .ok_or_else(|| format!("Hunk {} not found", hunk_id))?;
 
     let new_merged = diff_engine::merge::apply_hunk_to_buffer(&merged_text, hunk, &source)?;
+    DebugLogger::new("merge").log_merge_line_count(&fd.display_path, &new_merged, "apply_hunk");
     let now = chrono::Utc::now().timestamp();
     let updated = store::MergeBuffer {
         filediff_id: filediff_id.clone(),
-        merged_content_json: serde_json::json!({ "type": "virtual", "text": new_merged }).to_string(),
+        merged_content_json: serde_json::json!({ "type": "virtual", "text": new_merged })
+            .to_string(),
         dirty: true,
         updated_at: now,
     };
@@ -221,6 +307,8 @@ fn set_mergebuffer_text(
     text: String,
 ) -> Result<store::MergeBuffer, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let fd = store::get_filediff(&conn, &filediff_id)?;
+    DebugLogger::new("merge").log_merge_line_count(&fd.display_path, &text, "set_text");
     let now = chrono::Utc::now().timestamp();
     let mb = store::MergeBuffer {
         filediff_id: filediff_id.clone(),
@@ -238,14 +326,19 @@ fn save_mergebuffer(state: State<AppState>, filediff_id: String) -> Result<Strin
     let fd = store::get_filediff(&conn, &filediff_id)?;
     let mb = store::get_merge_buffer(&conn, &filediff_id)?;
 
-    let wt: serde_json::Value = serde_json::from_str(&fd.write_target_json)
-        .map_err(|e| e.to_string())?;
+    let wt: serde_json::Value =
+        serde_json::from_str(&fd.write_target_json).map_err(|e| e.to_string())?;
 
     match wt.get("type").and_then(|t| t.as_str()) {
         Some("path") => {
-            let target_path = wt.get("path").and_then(|p| p.as_str())
+            let target_path = wt
+                .get("path")
+                .and_then(|p| p.as_str())
                 .ok_or("Missing path in write_target")?;
             let merged_text = resolve_content_source(&mb.merged_content_json)?;
+            let debug = DebugLogger::new("merge");
+            debug.log_merge_line_count(&fd.display_path, &merged_text, "save");
+            debug.log(format!("save_target path={}", target_path));
 
             // Preserve EOL style
             if let Ok(existing) = io::read_file_text(std::path::Path::new(target_path)) {
@@ -258,12 +351,15 @@ fn save_mergebuffer(state: State<AppState>, filediff_id: String) -> Result<Strin
 
             // Mark as not dirty
             let now = chrono::Utc::now().timestamp();
-            store::upsert_merge_buffer(&conn, &store::MergeBuffer {
-                filediff_id,
-                merged_content_json: mb.merged_content_json,
-                dirty: false,
-                updated_at: now,
-            })?;
+            store::upsert_merge_buffer(
+                &conn,
+                &store::MergeBuffer {
+                    filediff_id,
+                    merged_content_json: mb.merged_content_json,
+                    dirty: false,
+                    updated_at: now,
+                },
+            )?;
 
             Ok("saved".to_string())
         }
@@ -275,12 +371,19 @@ fn save_mergebuffer(state: State<AppState>, filediff_id: String) -> Result<Strin
 }
 
 #[tauri::command]
-fn save_mergebuffer_as(state: State<AppState>, filediff_id: String, path: String) -> Result<String, String> {
+fn save_mergebuffer_as(
+    state: State<AppState>,
+    filediff_id: String,
+    path: String,
+) -> Result<String, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let fd = store::get_filediff(&conn, &filediff_id)?;
     let mb = store::get_merge_buffer(&conn, &filediff_id)?;
     let merged_text = resolve_content_source(&mb.merged_content_json)?;
     let resolved_path = resolve_save_as_target(&fd.write_target_json, &path)?;
+    let debug = DebugLogger::new("merge");
+    debug.log_merge_line_count(&fd.display_path, &merged_text, "save_as");
+    debug.log(format!("save_as_target path={}", resolved_path));
     io::atomic_write(std::path::Path::new(&resolved_path), merged_text.as_bytes())?;
 
     // Reattach write target to the chosen path
@@ -291,14 +394,18 @@ fn save_mergebuffer_as(state: State<AppState>, filediff_id: String, path: String
             serde_json::json!({ "type": "path", "path": resolved_path }).to_string(),
             filediff_id
         ],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
-    store::upsert_merge_buffer(&conn, &store::MergeBuffer {
-        filediff_id,
-        merged_content_json: mb.merged_content_json,
-        dirty: false,
-        updated_at: now,
-    })?;
+    store::upsert_merge_buffer(
+        &conn,
+        &store::MergeBuffer {
+            filediff_id,
+            merged_content_json: mb.merged_content_json,
+            dirty: false,
+            updated_at: now,
+        },
+    )?;
 
     Ok("saved".to_string())
 }
@@ -307,18 +414,30 @@ fn save_mergebuffer_as(state: State<AppState>, filediff_id: String, path: String
 
 #[tauri::command]
 fn handle_open_request(state: State<AppState>, request_json: String) -> Result<String, String> {
-    let req: open_request::OpenRequest = serde_json::from_str(&request_json)
-        .map_err(|e| format!("Invalid open request: {}", e))?;
+    let req: open_request::OpenRequest =
+        serde_json::from_str(&request_json).map_err(|e| format!("Invalid open request: {}", e))?;
     let conn = state.db.lock().map_err(|e| e.to_string())?;
-    let ws_id = state.current_workspace_id.lock().map_err(|e| e.to_string())?;
+    let ws_id = state
+        .current_workspace_id
+        .lock()
+        .map_err(|e| e.to_string())?;
 
     match req {
         open_request::OpenRequest::OpenPatch { path } => {
             workspace_controller::import_patch(&conn, &ws_id, &path)
         }
-        open_request::OpenRequest::OpenTwoWay { left_path, right_path, title, .. } => {
-            workspace_controller::compare_two_files(&conn, &ws_id, &left_path, &right_path, title.as_deref())
-        }
+        open_request::OpenRequest::OpenTwoWay {
+            left_path,
+            right_path,
+            title,
+            ..
+        } => workspace_controller::compare_two_files(
+            &conn,
+            &ws_id,
+            &left_path,
+            &right_path,
+            title.as_deref(),
+        ),
         open_request::OpenRequest::OpenFiles { paths } => {
             if paths.len() == 1 && (paths[0].ends_with(".diff") || paths[0].ends_with(".patch")) {
                 workspace_controller::import_patch(&conn, &ws_id, &paths[0])
@@ -339,13 +458,23 @@ fn handle_open_request(state: State<AppState>, request_json: String) -> Result<S
 fn resolve_content_source(json: &str) -> Result<String, String> {
     let v: serde_json::Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
     match v.get("type").and_then(|t| t.as_str()) {
-        Some("virtual") => Ok(v.get("text").and_then(|t| t.as_str()).unwrap_or("").to_string()),
+        Some("virtual") => Ok(v
+            .get("text")
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_string()),
         Some("path") => {
-            let path = v.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
+            let path = v
+                .get("path")
+                .and_then(|p| p.as_str())
+                .ok_or("Missing path")?;
             io::read_file_text(std::path::Path::new(path))
         }
         Some("snapshot") => {
-            let snap_id = v.get("snapshot_id").and_then(|s| s.as_str()).ok_or("Missing snapshot_id")?;
+            let snap_id = v
+                .get("snapshot_id")
+                .and_then(|s| s.as_str())
+                .ok_or("Missing snapshot_id")?;
             let cache_path = io::snapshot_dir().join(snap_id);
             io::read_file_text(&cache_path)
         }
@@ -379,16 +508,26 @@ fn main() {
 
     // Handle argv-based open requests before the UI starts.
     let args: Vec<String> = std::env::args().collect();
+    debugging::configure_from_args(&args);
+    let debug = DebugLogger::new("startup");
     if let Some(req) = open_request::parse_argv(&args) {
         match req {
             open_request::OpenRequest::OpenPatch { path } => {
                 if let Err(e) = workspace_controller::import_patch(&conn, &current_ws_id, &path) {
-                    eprintln!("Failed to import patch from argv: {}", e);
+                    debug.log(format!(
+                        "failed_to_import_patch_from_argv path={} error={}",
+                        path, e
+                    ));
                 } else {
-                    eprintln!("Imported patch from argv: {}", path);
+                    debug.log(format!("imported_patch_from_argv path={}", path));
                 }
             }
-            open_request::OpenRequest::OpenTwoWay { left_path, right_path, title, .. } => {
+            open_request::OpenRequest::OpenTwoWay {
+                left_path,
+                right_path,
+                title,
+                ..
+            } => {
                 if let Err(e) = workspace_controller::compare_two_files(
                     &conn,
                     &current_ws_id,
@@ -396,17 +535,32 @@ fn main() {
                     &right_path,
                     title.as_deref(),
                 ) {
-                    eprintln!("Failed to open two-way diff from argv: {}", e);
+                    debug.log(format!(
+                        "failed_to_open_two_way_diff_from_argv left={} right={} error={}",
+                        left_path, right_path, e
+                    ));
                 } else {
-                    eprintln!("Opened two-way diff from argv: {} vs {}", left_path, right_path);
+                    debug.log(format!(
+                        "opened_two_way_diff_from_argv left={} right={}",
+                        left_path, right_path
+                    ));
                 }
             }
             open_request::OpenRequest::OpenFiles { paths } => {
-                if paths.len() == 1 && (paths[0].ends_with(".diff") || paths[0].ends_with(".patch")) {
-                    if let Err(e) = workspace_controller::import_patch(&conn, &current_ws_id, &paths[0]) {
-                        eprintln!("Failed to import OpenFiles patch from argv: {}", e);
+                if paths.len() == 1 && (paths[0].ends_with(".diff") || paths[0].ends_with(".patch"))
+                {
+                    if let Err(e) =
+                        workspace_controller::import_patch(&conn, &current_ws_id, &paths[0])
+                    {
+                        debug.log(format!(
+                            "failed_to_import_openfiles_patch_from_argv path={} error={}",
+                            paths[0], e
+                        ));
                     } else {
-                        eprintln!("Imported OpenFiles patch from argv: {}", paths[0]);
+                        debug.log(format!(
+                            "imported_openfiles_patch_from_argv path={}",
+                            paths[0]
+                        ));
                     }
                 } else if paths.len() == 2 {
                     if let Err(e) = workspace_controller::compare_two_files(
@@ -416,9 +570,15 @@ fn main() {
                         &paths[1],
                         None,
                     ) {
-                        eprintln!("Failed to open OpenFiles two-way diff from argv: {}", e);
+                        debug.log(format!(
+                            "failed_to_open_openfiles_two_way_diff_from_argv left={} right={} error={}",
+                            paths[0], paths[1], e
+                        ));
                     } else {
-                        eprintln!("Opened OpenFiles two-way diff from argv: {} vs {}", paths[0], paths[1]);
+                        debug.log(format!(
+                            "opened_openfiles_two_way_diff_from_argv left={} right={}",
+                            paths[0], paths[1]
+                        ));
                     }
                 }
             }
