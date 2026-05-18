@@ -11,6 +11,8 @@
   --accent: #0e639c;
   --del-bg: rgba(255, 0, 0, 0.15);
   --add-bg: rgba(0, 180, 0, 0.15);
+  --danger: #ffb4ab;
+  --danger-bg: rgba(220, 38, 38, 0.16);
   --hover-bg: rgba(255,255,255,0.08);
   --subtle-hover-bg: rgba(255,255,255,0.05);
   --empty-row-bg: rgba(255,255,255,0.04);
@@ -30,6 +32,8 @@
   --accent: #2563eb;
   --del-bg: rgba(220, 38, 38, 0.14);
   --add-bg: rgba(22, 163, 74, 0.14);
+  --danger: #b42318;
+  --danger-bg: rgba(220, 38, 38, 0.12);
   --hover-bg: rgba(15, 23, 42, 0.08);
   --subtle-hover-bg: rgba(15, 23, 42, 0.05);
   --empty-row-bg: rgba(15, 23, 42, 0.04);
@@ -45,7 +49,7 @@ html, body, #root {
   font-size: 13px;
 }
 
-/* ── Layout ── */
+/* Layout */
 
 .app-root {
   display: flex;
@@ -80,7 +84,7 @@ html, body, #root {
   background: var(--accent);
 }
 
-/* ── Sidebar ── */
+/* Sidebar */
 
 .sidebar {
   width: 100%;
@@ -294,7 +298,7 @@ html, body, #root {
 .status-move-add,
 .status-move-delete { background: #3794ff; }
 
-/* ── Main ── */
+/* Main */
 
 .main {
   flex: 1;
@@ -305,7 +309,7 @@ html, body, #root {
   overflow: hidden;
 }
 
-/* ── Tab bar ── */
+/* Tab bar */
 
 .tab-bar {
   display: flex;
@@ -378,7 +382,7 @@ html, body, #root {
 }
 .btn-merge-toggle:hover { filter: brightness(1.2); }
 
-/* ── Editor area ── */
+/* Editor area */
 
 .workspace-shell {
   flex: 1 1 auto;
@@ -409,7 +413,7 @@ html, body, #root {
   font-size: 16px;
 }
 
-/* ── Diff viewer ── */
+/* Diff viewer */
 
 .diff-viewer {
   flex: 1;
@@ -489,7 +493,7 @@ html, body, #root {
   border-bottom: 1px solid var(--border);
 }
 
-/* ── Merge panel ── */
+/* Merge panel */
 
 .merge-panel {
   flex: 0 0 auto;
@@ -590,6 +594,14 @@ html, body, #root {
   font-size: 11px;
 }
 .merge-toolbar button:hover { background: var(--hover-bg); }
+
+.merge-error {
+  padding: 8px 12px;
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
 
 /* Make inline suggestion/ghost text visible on dark editor backgrounds. */
 .monaco-editor .ghost-text,

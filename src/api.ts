@@ -7,7 +7,7 @@ import type {
   MergeBuffer,
 } from "./types";
 
-// ── Workspace commands ──
+// Workspace commands
 
 export const getCurrentWorkspace = () =>
   invoke<Workspace>("get_current_workspace");
@@ -21,7 +21,7 @@ export const createWorkspace = (name: string) =>
 export const openWorkspace = (id: string) =>
   invoke<void>("open_workspace", { id });
 
-// ── Diff creation ──
+// Diff creation
 
 export const importPatch = (path: string) =>
   invoke<string>("import_patch", { path });
@@ -44,7 +44,7 @@ export const importP4Shelved = (change: string, cwd?: string) =>
 export const importP4Submitted = (change: string, cwd?: string) =>
   invoke<string>("import_p4_submitted", { change, cwd });
 
-// ── Diff access ──
+// Diff access
 
 export const listDiffsets = (workspaceId: string) =>
   invoke<DiffSet[]>("list_diffsets", { workspaceId });
@@ -64,7 +64,7 @@ export const getRenderedDiff = (filediffId: string) =>
 export const markReviewed = (filediffId: string, reviewed: boolean) =>
   invoke<void>("mark_reviewed", { filediffId, reviewed });
 
-// ── Merge panel ──
+// Merge panel
 
 export const initMergebuffer = (filediffId: string) =>
   invoke<MergeBuffer>("init_mergebuffer", { filediffId });

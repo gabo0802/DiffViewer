@@ -2,18 +2,18 @@ import React, { useEffect, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import * as api from "../api";
 import {
+  extractVirtualText,
+  parseHunks,
+  suggestedSavePath,
+  type ParsedHunk,
+} from "../diffDomain";
+import {
   LANGUAGE_OPTIONS,
   resolveEditorLanguage,
   type EditorPreferences,
 } from "../editorPreferences";
+import FormDialog from "./FormDialog";
 import type { FileDiff, MergeBuffer } from "../types";
-
-type ParsedHunk = {
-  lines: Array<{ kind: "context" | "add" | "del"; text: string }>;
-  old_count: number;
-  new_start: number;
-  new_count: number;
-};
 
 interface Props {
   fileDiff: FileDiff;
@@ -47,6 +47,8 @@ export default function MergePanel({
   const [height, setHeight] = useState(320);
   const [isResizing, setIsResizing] = useState(false);
   const [showEditorSettings, setShowEditorSettings] = useState(false);
+  const [saveAsVisible, setSaveAsVisible] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<any>(null);
   const mergeDecorationIdsRef = useRef<string[]>([]);
@@ -64,9 +66,10 @@ export default function MergePanel({
         .initMergebuffer(fileDiff.filediff_id)
         .then((mb) => {
           setBuffer(mb);
-          setMergedText(extractText(mb.merged_content_json));
+          setMergedText(extractVirtualText(mb.merged_content_json));
+          setSaveError(null);
         })
-        .catch(console.error);
+        .catch((error) => setSaveError(String(error)));
     }
   }, [visible, fileDiff.filediff_id]);
 
@@ -103,6 +106,7 @@ export default function MergePanel({
   }, [fileDiff.hunks_json, mergedText, visible]);
 
   const handleSave = async () => {
+    setSaveError(null);
     try {
       await api.setMergebufferText(fileDiff.filediff_id, mergedText);
       await api.saveMergebuffer(fileDiff.filediff_id);
@@ -111,26 +115,29 @@ export default function MergePanel({
     } catch (e: any) {
       const message = e?.toString?.() ?? String(e);
       if (message.toLowerCase().includes("save as required")) {
-        await handleSaveAs();
+        setSaveAsVisible(true);
       } else {
-        console.error(e);
-        alert(`Save failed: ${message}`);
+        setSaveError(`Save failed: ${message}`);
       }
     }
   };
 
-  const handleSaveAs = async () => {
-    const suggested = suggestedSavePath(fileDiff);
-    const path = window.prompt("Save merged output as path:", suggested);
+  const handleSaveAs = () => {
+    setSaveError(null);
+    setSaveAsVisible(true);
+  };
+
+  const submitSaveAs = async (values: Record<string, string>) => {
+    const path = values.path.trim();
     if (!path) return;
     try {
       await api.setMergebufferText(fileDiff.filediff_id, mergedText);
       await api.saveMergebufferAs(fileDiff.filediff_id, path);
       setBuffer((prev) => (prev ? { ...prev, dirty: false } : prev));
+      setSaveAsVisible(false);
       await onSaveComplete?.();
     } catch (e) {
-      console.error(e);
-      alert(`Save As failed: ${String(e)}`);
+      setSaveError(`Save As failed: ${String(e)}`);
     }
   };
 
@@ -139,8 +146,7 @@ export default function MergePanel({
     try {
       await editorRef.current.getAction("editor.action.formatDocument")?.run();
     } catch (error) {
-      console.error(error);
-      alert(`Format failed: ${String(error)}`);
+      setSaveError(`Format failed: ${String(error)}`);
     }
   };
 
@@ -191,6 +197,7 @@ export default function MergePanel({
         <button type="button" onClick={handleSaveAs}>Save As</button>
         <button type="button" onClick={onToggle}>Close</button>
       </div>
+      {saveError && <div className="merge-error">{saveError}</div>}
       {showEditorSettings && (
         <div className="editor-settings-panel">
           <label className="editor-settings-field">
@@ -286,6 +293,23 @@ export default function MergePanel({
           }}
         />
       </div>
+      <FormDialog
+        visible={saveAsVisible}
+        title="Save Merged Output"
+        description="Enter the target path for the merged file."
+        confirmLabel="Save"
+        onCancel={() => setSaveAsVisible(false)}
+        onConfirm={submitSaveAs}
+        fields={[
+          {
+            id: "path",
+            label: "Path",
+            defaultValue: suggestedSavePath(fileDiff),
+            placeholder: "Path to save merged output",
+            required: true,
+          },
+        ]}
+      />
     </div>
   );
 }
@@ -317,7 +341,7 @@ function buildMergeDecorations(hunksJson: string, mergedText: string) {
       options: Record<string, unknown>;
     }> = [];
 
-    let currentLine = hunk.new_start;
+    let currentLine = hunk.new_start ?? 1;
     let pendingDeletionCount = 0;
 
     for (const line of hunk.lines ?? []) {
@@ -359,7 +383,7 @@ function buildMergeDecorations(hunksJson: string, mergedText: string) {
       }
     }
 
-    if (pendingDeletionCount > 0 || (hunk.old_count > 0 && hunk.new_count === 0)) {
+    if (pendingDeletionCount > 0 || ((hunk.old_count ?? 0) > 0 && (hunk.new_count ?? 0) === 0)) {
       decorations.push(deletionMarkerDecoration(currentLine, lineCount, true));
     }
 
@@ -388,36 +412,6 @@ function deletionMarkerDecoration(
   };
 }
 
-function parseHunks(hunksJson: string): ParsedHunk[] {
-  try {
-    const parsed = JSON.parse(hunksJson);
-    return Array.isArray(parsed) ? (parsed as ParsedHunk[]) : [];
-  } catch {
-    return [];
-  }
-}
-
 function clampLine(lineNumber: number, lineCount: number) {
   return Math.min(Math.max(lineNumber || 1, 1), lineCount);
-}
-
-function extractText(json: string): string {
-  try {
-    const parsed = JSON.parse(json);
-    return parsed.text ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function suggestedSavePath(fileDiff: FileDiff): string {
-  try {
-    const parsed = JSON.parse(fileDiff.write_target_json);
-    if (parsed?.type === "path" && typeof parsed.path === "string") {
-      return parsed.path;
-    }
-  } catch {
-    // Ignore and fall back to display path.
-  }
-  return fileDiff.display_path || "merged-output.txt";
 }

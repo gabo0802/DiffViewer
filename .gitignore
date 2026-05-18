@@ -4,4 +4,6 @@ build/
 .target/
 src-tauri/target/
 **/*.log
+*.diffedit.bak
+*.diffedit.tmp
 .env

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import * as api from "./api";
 import Sidebar from "./components/Sidebar";
 import DiffViewer from "./components/DiffViewer";
@@ -7,70 +7,46 @@ import {
   loadEditorPreferences,
   type EditorPreferences,
 } from "./editorPreferences";
-import { buildDisambiguatedPathLabels } from "./pathLabels";
-import type { FileDiff, RenderedDiffModel } from "./types";
+import { useDiffMergeScrollSync } from "./hooks/useDiffMergeScrollSync";
+import { useDiffTabs } from "./hooks/useDiffTabs";
+import { usePersistentState } from "./hooks/usePersistentState";
+import { useResizablePane } from "./hooks/useResizablePane";
+import type { RenderedDiffModel } from "./types";
 
 const SIDEBAR_WIDTH_KEY = "diffviewer.sidebarWidth";
 const EDITOR_PREFERENCES_KEY = "diffviewer.editorPreferences";
 const THEME_KEY = "diffviewer.theme";
 
 export default function App() {
-  const [tabs, setTabs] = useState<FileDiff[]>([]);
-  const [activeTab, setActiveTab] = useState<string | null>(null);
   const [mergeVisible, setMergeVisible] = useState(false);
   const [sidebarRefreshToken, setSidebarRefreshToken] = useState(0);
-  const [sidebarWidth, setSidebarWidth] = useState(() => readStoredSidebarWidth());
-  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
-  const [renderedModel, setRenderedModel] = useState<RenderedDiffModel | null>(null);
-  const [syncSignal, setSyncSignal] = useState<ScrollSyncSignal | null>(null);
   const [editorPreferences, setEditorPreferences] = useState<EditorPreferences>(() =>
     loadEditorPreferences(EDITOR_PREFERENCES_KEY)
   );
-  const [theme, setTheme] = useState<ThemeMode>(() => readStoredTheme());
-  const sidebarStartX = useRef(0);
-  const sidebarStartWidth = useRef(sidebarWidth);
-
-  const openFileDiff = (fd: FileDiff) => {
-    if (!tabs.find((t) => t.filediff_id === fd.filediff_id)) {
-      setTabs((prev) => [...prev, fd]);
-    }
-    setActiveTab(fd.filediff_id);
-  };
-
-  const closeTab = (id: string) => {
-    setTabs((prev) => {
-      const closedIndex = prev.findIndex((t) => t.filediff_id === id);
-      const nextTabs = prev.filter((t) => t.filediff_id !== id);
-
-      if (activeTab === id) {
-        const fallbackTab =
-          nextTabs[closedIndex] ?? nextTabs[Math.max(0, closedIndex - 1)] ?? null;
-        setActiveTab(fallbackTab?.filediff_id ?? null);
-        if (!fallbackTab) {
-          setMergeVisible(false);
-        }
-      }
-
-      return nextTabs;
-    });
-  };
-
-  const currentFd = tabs.find((t) => t.filediff_id === activeTab) ?? null;
-  const tabLabels = useMemo(
-    () =>
-      buildDisambiguatedPathLabels(
-        tabs.map((tab) => ({ id: tab.filediff_id, path: tab.display_path }))
-      ),
-    [tabs]
-  );
-  const firstChangedMergeLine = useMemo(
-    () => (currentFd ? getFirstChangedMergeLine(currentFd) : 1),
-    [currentFd]
-  );
-  const canEditCurrent = useMemo(
-    () => (currentFd ? isEditableFileDiff(currentFd) : false),
-    [currentFd]
-  );
+  const [theme, setTheme] = usePersistentState<ThemeMode>(THEME_KEY, readStoredTheme);
+  const {
+    tabs,
+    setTabs,
+    activeTab,
+    setActiveTab,
+    currentFileDiff: currentFd,
+    tabLabels,
+    openFileDiff,
+    closeTab,
+    firstChangedMergeLine,
+    canEditCurrent,
+  } = useDiffTabs(() => setMergeVisible(false));
+  const {
+    width: sidebarWidth,
+    isResizing: isResizingSidebar,
+    beginResize: beginSidebarResize,
+  } = useResizablePane(readStoredSidebarWidth(), 220, 520);
+  const {
+    setRenderedModel,
+    syncSignal,
+    handleDiffScroll,
+    handleMergeScroll,
+  } = useDiffMergeScrollSync(currentFd?.filediff_id);
 
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth));
@@ -86,70 +62,14 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    setRenderedModel(null);
-    setSyncSignal(null);
-  }, [currentFd?.filediff_id]);
-
-  useEffect(() => {
     if (!canEditCurrent && mergeVisible) {
       setMergeVisible(false);
     }
   }, [canEditCurrent, mergeVisible]);
 
-  useEffect(() => {
-    if (!isResizingSidebar) return;
-
-    const onMouseMove = (event: MouseEvent) => {
-      const delta = event.clientX - sidebarStartX.current;
-      const nextWidth = clamp(sidebarStartWidth.current + delta, 220, 520);
-      setSidebarWidth(nextWidth);
-    };
-
-    const onMouseUp = () => setIsResizingSidebar(false);
-
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-    return () => {
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    };
-  }, [isResizingSidebar]);
-
-  const beginSidebarResize = (event: React.MouseEvent<HTMLDivElement>) => {
-    sidebarStartX.current = event.clientX;
-    sidebarStartWidth.current = sidebarWidth;
-    setIsResizingSidebar(true);
-  };
-
   const handleRenderedModelChange = useCallback((nextModel: RenderedDiffModel | null) => {
     setRenderedModel(nextModel);
-  }, []);
-
-  const handleDiffScroll = useCallback(
-    (diffTopRow: number) => {
-      if (!renderedModel) return;
-      setSyncSignal({
-        source: "diff",
-        diffTopRow,
-        mergeTopLine: mapDiffRowToMergeLine(renderedModel, diffTopRow),
-        token: Date.now(),
-      });
-    },
-    [renderedModel]
-  );
-
-  const handleMergeScroll = useCallback(
-    (mergeTopLine: number) => {
-      if (!renderedModel) return;
-      setSyncSignal({
-        source: "merge",
-        diffTopRow: mapMergeLineToDiffRow(renderedModel, mergeTopLine),
-        mergeTopLine,
-        token: Date.now(),
-      });
-    },
-    [renderedModel]
-  );
+  }, [setRenderedModel]);
 
   const handleMergeSaveComplete = useCallback(async () => {
     if (!currentFd) return;
@@ -173,7 +93,7 @@ export default function App() {
       prev.map((tab) => (tab.filediff_id === currentFd.filediff_id ? replacement : tab))
     );
     setActiveTab(replacement.filediff_id);
-  }, [currentFd]);
+  }, [currentFd, setActiveTab, setTabs]);
 
   return (
     <div className="app-root">
@@ -284,67 +204,7 @@ function clamp(value: number, min: number, max: number) {
 
 type ThemeMode = "dark" | "light";
 
-type ScrollSyncSignal = {
-  source: "diff" | "merge";
-  diffTopRow: number;
-  mergeTopLine: number;
-  token: number;
-};
-
-type ParsedHunk = {
-  new_start?: number;
-};
-
-function getFirstChangedMergeLine(fileDiff: FileDiff) {
-  try {
-    const hunks = JSON.parse(fileDiff.hunks_json) as ParsedHunk[];
-    return Math.max(1, hunks[0]?.new_start ?? 1);
-  } catch {
-    return 1;
-  }
-}
-
-function mapDiffRowToMergeLine(model: RenderedDiffModel, diffTopRow: number) {
-  const rows = model.rows;
-  if (rows.length === 0) return 1;
-  const index = clamp(diffTopRow - 1, 0, rows.length - 1);
-
-  for (let offset = 0; offset < rows.length; offset += 1) {
-    const right = rows[index + offset]?.right;
-    if (right && right.line_no > 0) return right.line_no;
-    const previous = rows[index - offset]?.right;
-    if (previous && previous.line_no > 0) return previous.line_no;
-  }
-
-  return 1;
-}
-
-function mapMergeLineToDiffRow(model: RenderedDiffModel, mergeTopLine: number) {
-  const targetLine = Math.max(1, mergeTopLine);
-  let fallbackRow = 1;
-
-  for (let index = 0; index < model.rows.length; index += 1) {
-    const right = model.rows[index].right;
-    if (!right || right.line_no <= 0) continue;
-    fallbackRow = index + 1;
-    if (right.line_no >= targetLine) {
-      return index + 1;
-    }
-  }
-
-  return fallbackRow;
-}
-
 function readStoredTheme(): ThemeMode {
   const stored = window.localStorage.getItem(THEME_KEY);
   return stored === "light" ? "light" : "dark";
-}
-
-function isEditableFileDiff(fileDiff: FileDiff) {
-  try {
-    const parsed = JSON.parse(fileDiff.write_target_json);
-    return parsed?.type !== "read_only";
-  } catch {
-    return true;
-  }
 }

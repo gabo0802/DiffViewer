@@ -20,6 +20,7 @@ type DiffSetMeta = {
 };
 
 const PROVIDER_ORDER = ["p4", "git", "patch", "external"];
+type ImportKind = "gitWorking" | "gitCommit" | "p4Pending" | "p4Shelved" | "p4Submitted";
 
 export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
@@ -28,9 +29,7 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
   const [filediffs, setFilediffs] = useState<Record<string, FileDiff[]>>({});
   const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pendingImportKind, setPendingImportKind] = useState<
-    "gitCommit" | "p4Pending" | "p4Shelved" | "p4Submitted" | null
-  >(null);
+  const [pendingImportKind, setPendingImportKind] = useState<ImportKind | null>(null);
 
   const loadDiffsets = useCallback(async (ws: Workspace, refreshLive = false) => {
     const next = refreshLive
@@ -90,45 +89,21 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
     }
   };
 
-  const runImport = async (kind: "gitWorking" | "gitCommit" | "p4Pending" | "p4Shelved" | "p4Submitted") => {
+  const runImport = async (kind: ImportKind) => {
     setError(null);
-    if (
-      kind === "gitCommit" ||
-      kind === "p4Pending" ||
-      kind === "p4Shelved" ||
-      kind === "p4Submitted"
-    ) {
-      setPendingImportKind(kind);
-      return;
-    }
-    try {
-      setIsImporting(true);
-      let diffsetId: string | null = null;
-      if (kind === "gitWorking") {
-        const repoPath = window.prompt("Git repository path:", ".");
-        if (!repoPath) return;
-        diffsetId = await api.importGitWorkingTree(repoPath);
-      }
-      if (workspace) await loadDiffsets(workspace);
-      if (diffsetId) {
-        setExpanded(diffsetId);
-        const fds = await api.listFilediffs(diffsetId);
-        setFilediffs((prev) => ({ ...prev, [diffsetId!]: fds }));
-      }
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setIsImporting(false);
-    }
+    setPendingImportKind(kind);
   };
 
-  const submitP4Import = async (values: Record<string, string>) => {
+  const submitImport = async (values: Record<string, string>) => {
     if (!pendingImportKind) return;
     setError(null);
     try {
       setIsImporting(true);
       let diffsetId: string | null = null;
-      if (pendingImportKind === "gitCommit") {
+      if (pendingImportKind === "gitWorking") {
+        const repoPath = values.repoPath.trim();
+        diffsetId = await api.importGitWorkingTree(repoPath);
+      } else if (pendingImportKind === "gitCommit") {
         const repoPath = values.repoPath.trim();
         const rev = values.rev.trim();
         diffsetId = await api.importGitCommit(repoPath, rev);
@@ -243,16 +218,15 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
         description={dialogDescription(pendingImportKind)}
         confirmLabel="Open"
         onCancel={() => setPendingImportKind(null)}
-        onConfirm={submitP4Import}
+        onConfirm={submitImport}
         fields={dialogFields(pendingImportKind)}
       />
     </aside>
   );
 }
 
-function dialogTitle(
-  kind: "gitCommit" | "p4Pending" | "p4Shelved" | "p4Submitted" | null
-) {
+function dialogTitle(kind: ImportKind | null) {
+  if (kind === "gitWorking") return "Open Git Working Tree";
   if (kind === "gitCommit") return "Open Git Commit";
   if (kind === "p4Pending") return "Open P4 Pending Changelist";
   if (kind === "p4Shelved") return "Open P4 Shelved Changelist";
@@ -260,18 +234,15 @@ function dialogTitle(
   return "";
 }
 
-function dialogDescription(
-  kind: "gitCommit" | "p4Pending" | "p4Shelved" | "p4Submitted" | null
-) {
+function dialogDescription(kind: ImportKind | null) {
+  if (kind === "gitWorking") return "Enter the Git repository path to open.";
   if (kind === "gitCommit") return "Enter the Git repository path and revision to open.";
   return "Enter the changelist number and optional workspace path.";
 }
 
-function dialogFields(
-  kind: "gitCommit" | "p4Pending" | "p4Shelved" | "p4Submitted" | null
-): FormDialogField[] {
-  if (kind === "gitCommit") {
-    return [
+function dialogFields(kind: ImportKind | null): FormDialogField[] {
+  if (kind === "gitWorking" || kind === "gitCommit") {
+    const fields: FormDialogField[] = [
       {
         id: "repoPath",
         label: "Repository",
@@ -279,14 +250,17 @@ function dialogFields(
         placeholder: "Path to the Git repository",
         required: true,
       },
-      {
+    ];
+    if (kind === "gitCommit") {
+      fields.push({
         id: "rev",
         label: "Revision",
         defaultValue: "HEAD",
         placeholder: "Commit SHA, branch, or revision",
         required: true,
-      },
-    ];
+      });
+    }
+    return fields;
   }
 
   return [

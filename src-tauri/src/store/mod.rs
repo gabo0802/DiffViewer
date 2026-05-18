@@ -22,7 +22,7 @@ pub fn open_db() -> Result<Connection, String> {
     Ok(conn)
 }
 
-// ── Data structs ──
+// Data structs
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Workspace {
@@ -87,7 +87,7 @@ pub struct MergeBuffer {
     pub updated_at: i64,
 }
 
-// ── CRUD operations ──
+// CRUD operations
 
 pub fn ensure_inbox(conn: &Connection) -> Result<Workspace, String> {
     let existing: Option<Workspace> = conn
@@ -124,6 +124,23 @@ pub fn ensure_inbox(conn: &Connection) -> Result<Workspace, String> {
         last_opened_at: now,
         settings_json: "{}".to_string(),
     })
+}
+
+pub fn get_workspace(conn: &Connection, workspace_id: &str) -> Result<Workspace, String> {
+    conn.query_row(
+        "SELECT workspace_id, name, created_at, last_opened_at, settings_json FROM workspaces WHERE workspace_id = ?1",
+        params![workspace_id],
+        |row| {
+            Ok(Workspace {
+                workspace_id: row.get(0)?,
+                name: row.get(1)?,
+                created_at: row.get(2)?,
+                last_opened_at: row.get(3)?,
+                settings_json: row.get(4)?,
+            })
+        },
+    )
+    .map_err(|err| err.to_string())
 }
 
 pub fn list_workspaces(conn: &Connection) -> Result<Vec<Workspace>, String> {

@@ -110,7 +110,7 @@ pub fn parse_argv(args: &[String]) -> Option<OpenRequest> {
         }
     }
 
-    // Two bare paths → two-way compare
+    // Two bare paths become a two-way compare.
     if args.len() == 2 {
         return Some(OpenRequest::OpenTwoWay {
             left_path: args[0].clone(),
@@ -121,7 +121,7 @@ pub fn parse_argv(args: &[String]) -> Option<OpenRequest> {
         });
     }
 
-    // Multiple files → OpenFiles (drag/drop)
+    // Multiple files become OpenFiles (drag/drop).
     if !args.is_empty() {
         return Some(OpenRequest::OpenFiles {
             paths: args.to_vec(),
