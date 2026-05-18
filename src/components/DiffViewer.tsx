@@ -6,6 +6,7 @@ import type { FileDiff, RenderedDiffModel, AlignmentRow } from "../types";
 
 interface Props {
   fileDiff: FileDiff;
+  displayLabel?: string;
   editorPreferences: EditorPreferences;
   theme: "dark" | "light";
   onModelChange?: (model: RenderedDiffModel | null) => void;
@@ -16,6 +17,7 @@ interface Props {
 
 export default function DiffViewer({
   fileDiff,
+  displayLabel,
   editorPreferences,
   theme,
   onModelChange,
@@ -155,7 +157,9 @@ export default function DiffViewer({
   return (
     <div className="diff-viewer">
       <div className="diff-toolbar">
-        <span className="diff-path">{fileDiff.display_path}</span>
+        <span className="diff-path" title={fileDiff.display_path}>
+          {displayLabel ?? fileDiff.display_path}
+        </span>
         <span className="diff-status badge">{fileDiff.status}</span>
         <span className="diff-nav">
           <button onClick={() => goHunk(-1)} title="Previous hunk">

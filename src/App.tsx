@@ -6,6 +6,7 @@ import {
   loadEditorPreferences,
   type EditorPreferences,
 } from "./editorPreferences";
+import { buildDisambiguatedPathLabels } from "./pathLabels";
 import type { FileDiff, RenderedDiffModel } from "./types";
 
 const SIDEBAR_WIDTH_KEY = "diffviewer.sidebarWidth";
@@ -54,6 +55,13 @@ export default function App() {
   };
 
   const currentFd = tabs.find((t) => t.filediff_id === activeTab) ?? null;
+  const tabLabels = useMemo(
+    () =>
+      buildDisambiguatedPathLabels(
+        tabs.map((tab) => ({ id: tab.filediff_id, path: tab.display_path }))
+      ),
+    [tabs]
+  );
   const firstChangedMergeLine = useMemo(
     () => (currentFd ? getFirstChangedMergeLine(currentFd) : 1),
     [currentFd]
@@ -184,8 +192,9 @@ export default function App() {
               key={fd.filediff_id}
               className={`tab ${fd.filediff_id === activeTab ? "tab-active" : ""}`}
               onClick={() => setActiveTab(fd.filediff_id)}
+              title={fd.display_path}
             >
-              <span className="tab-label">{fd.display_path}</span>
+              <span className="tab-label">{tabLabels[fd.filediff_id] ?? fd.display_path}</span>
               <button
                 type="button"
                 className="tab-close"
@@ -225,6 +234,7 @@ export default function App() {
             {currentFd ? (
               <DiffViewer
                 fileDiff={currentFd}
+                displayLabel={tabLabels[currentFd.filediff_id] ?? currentFd.display_path}
                 editorPreferences={editorPreferences}
                 theme={theme}
                 onModelChange={handleRenderedModelChange}
