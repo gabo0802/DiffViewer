@@ -52,7 +52,7 @@ Use the existing repo patterns rather than inventing new ones.
 ## P4 Debugging
 
 - Base Debugging lives in `src-tauri/src/debugging.rs`.
-  - Enable it by passing `--debug` when running the app.
+  - Enable it by passing `--debug` when running the app. `npm.cmd run tauri:dev -- -- -- --debug`
 - Perforce logging lives in `src-tauri/src/scm.rs`.
 - Look for `[diffviewer-debug][scm]` and `[diffviewer-debug][merge]` lines in the Tauri dev console when debugging backend diff state.
 - When debugging P4 failures, inspect:
