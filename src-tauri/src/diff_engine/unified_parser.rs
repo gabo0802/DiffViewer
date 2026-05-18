@@ -408,4 +408,21 @@ Differences ...
         assert_eq!(files[0].new_path, "//depot/main/foo.cpp#52");
         assert_eq!(files[0].hunks.len(), 1);
     }
+
+    #[test]
+    fn test_p4_section_header_is_overridden_by_dash_headers() {
+        let patch = "\
+==== //depot/main/foo.cpp#7 - C:\\work\\foo.cpp ====
+--- //depot/main/foo.cpp#7
++++ C:\\work\\foo.cpp
+@@ -1,1 +1,1 @@
+-old
++new
+";
+        let files = parse_unified_diff(patch);
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].old_path, "//depot/main/foo.cpp#7");
+        assert_eq!(files[0].new_path, "C:\\work\\foo.cpp");
+        assert_eq!(files[0].status, "renamed");
+    }
 }
