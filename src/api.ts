@@ -1,6 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   Workspace,
+  WorkspaceSettings,
+  P4PendingChangeSummary,
+  GitCommitSummary,
   DiffSet,
   FileDiff,
   RenderedDiffModel,
@@ -12,6 +15,9 @@ import type {
 export const getCurrentWorkspace = () =>
   invoke<Workspace>("get_current_workspace");
 
+export const getCurrentWorkspaceSettings = () =>
+  invoke<WorkspaceSettings>("get_current_workspace_settings");
+
 export const listWorkspaces = () =>
   invoke<Workspace[]>("list_workspaces");
 
@@ -20,6 +26,27 @@ export const createWorkspace = (name: string) =>
 
 export const openWorkspace = (id: string) =>
   invoke<void>("open_workspace", { id });
+
+export const saveCurrentWorkspaceLocation = (provider: "git" | "p4", path: string) =>
+  invoke<WorkspaceSettings>("save_current_workspace_location", { provider, path });
+
+export const selectCurrentWorkspaceLocation = (
+  provider: "git" | "p4",
+  locationId: string | null
+) =>
+  invoke<WorkspaceSettings>("select_current_workspace_location", {
+    provider,
+    locationId,
+  });
+
+export const removeCurrentWorkspaceLocation = (
+  provider: "git" | "p4",
+  locationId: string
+) =>
+  invoke<WorkspaceSettings>("remove_current_workspace_location", {
+    provider,
+    locationId,
+  });
 
 // Diff creation
 
@@ -43,6 +70,12 @@ export const importP4Shelved = (change: string, cwd?: string) =>
 
 export const importP4Submitted = (change: string, cwd?: string) =>
   invoke<string>("import_p4_submitted", { change, cwd });
+
+export const listGitCommits = (repoPath: string, limit = 30) =>
+  invoke<GitCommitSummary[]>("list_git_commits", { repoPath, limit });
+
+export const listP4PendingChanges = (cwd?: string) =>
+  invoke<P4PendingChangeSummary[]>("list_p4_pending_changes", { cwd });
 
 // Diff access
 

@@ -3,6 +3,7 @@ import Editor from "@monaco-editor/react";
 import * as api from "../api";
 import { resolveEditorLanguage, type EditorPreferences } from "../editorPreferences";
 import type { FileDiff, RenderedDiffModel, AlignmentRow } from "../types";
+import { LoadingIcon, NextIcon, PrevIcon } from "./Icons";
 
 interface Props {
   fileDiff: FileDiff;
@@ -166,7 +167,7 @@ export default function DiffViewer({
         <span className="diff-status badge">{fileDiff.status}</span>
         <span className="diff-nav">
           <button onClick={() => goHunk(-1)} title="Previous hunk">
-            Prev
+            <PrevIcon />
           </button>
           <span>
             {model
@@ -174,7 +175,7 @@ export default function DiffViewer({
               : "-"}
           </span>
           <button onClick={() => goHunk(1)} title="Next hunk">
-            Next
+            <NextIcon />
           </button>
         </span>
       </div>
@@ -192,7 +193,10 @@ export default function DiffViewer({
         )}
         {!loadError && !model && (
           <div className="empty-state" style={{ width: "100%" }}>
-            Loading diff...
+            <span className="empty-state-inline">
+              <LoadingIcon className="button-icon-spin" />
+              <span>Loading diff...</span>
+            </span>
           </div>
         )}
 

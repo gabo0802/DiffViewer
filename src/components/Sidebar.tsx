@@ -1,8 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import * as api from "../api";
 import { buildDisambiguatedPathLabels } from "../pathLabels";
-import FormDialog, { type FormDialogField } from "./FormDialog";
-import type { Workspace, DiffSet, FileDiff } from "../types";
+import type {
+  DiffSet,
+  FileDiff,
+  SavedWorkspaceLocation,
+  Workspace,
+  WorkspaceSettings,
+} from "../types";
+import AddDiffDialog, { type AddDiffRequest } from "./AddDiffDialog";
+import FormDialog from "./FormDialog";
+import { LoadingIcon, SaveIcon } from "./Icons";
 
 interface Props {
   onSelectFileDiff: (fd: FileDiff) => void;
@@ -19,38 +27,53 @@ type DiffSetMeta = {
   rev?: string;
 };
 
+type DirectoryProvider = "git" | "p4";
+
 const PROVIDER_ORDER = ["p4", "git", "patch", "external"];
-type ImportKind = "gitWorking" | "gitCommit" | "p4Pending" | "p4Shelved" | "p4Submitted";
+const EMPTY_SETTINGS: WorkspaceSettings = {
+  savedGitDirectories: [],
+  savedP4Directories: [],
+  selectedGitDirectoryId: null,
+  selectedP4DirectoryId: null,
+};
 
 export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  const [settings, setSettings] = useState<WorkspaceSettings>(EMPTY_SETTINGS);
   const [diffsets, setDiffsets] = useState<DiffSet[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filediffs, setFilediffs] = useState<Record<string, FileDiff[]>>({});
   const [isImporting, setIsImporting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pendingImportKind, setPendingImportKind] = useState<ImportKind | null>(null);
+  const [addDiffVisible, setAddDiffVisible] = useState(false);
+  const [saveDirectoryProvider, setSaveDirectoryProvider] = useState<DirectoryProvider | null>(null);
+
+  const loadWorkspaceState = useCallback(async () => {
+    const [ws, nextSettings] = await Promise.all([
+      api.getCurrentWorkspace(),
+      api.getCurrentWorkspaceSettings(),
+    ]);
+    setWorkspace(ws);
+    setSettings(nextSettings);
+    return ws;
+  }, []);
 
   const loadDiffsets = useCallback(async (ws: Workspace, refreshLive = false) => {
     const next = refreshLive
       ? await api.refreshWorkspaceDiffsets(ws.workspace_id)
       : await api.listDiffsets(ws.workspace_id);
     setDiffsets(next);
+    return next;
   }, []);
 
   useEffect(() => {
-    api
-      .getCurrentWorkspace()
-      .then((ws) => {
-        setWorkspace(ws);
-      })
-      .catch((err) => setError(String(err)));
-  }, [loadDiffsets]);
+    loadWorkspaceState().catch((err) => setError(String(err)));
+  }, [loadWorkspaceState]);
 
   useEffect(() => {
-    if (workspace) {
-      loadDiffsets(workspace).catch((err) => setError(String(err)));
-    }
+    if (!workspace) return;
+    loadDiffsets(workspace).catch((err) => setError(String(err)));
   }, [workspace, loadDiffsets]);
 
   useEffect(() => {
@@ -77,6 +100,15 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
     });
   }, [diffsets]);
 
+  const selectedGitLocation = findSelectedLocation(
+    settings.savedGitDirectories,
+    settings.selectedGitDirectoryId
+  );
+  const selectedP4Location = findSelectedLocation(
+    settings.savedP4Directories,
+    settings.selectedP4DirectoryId
+  );
+
   const toggleDiffset = async (dsId: string) => {
     if (expanded === dsId) {
       setExpanded(null);
@@ -89,46 +121,80 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
     }
   };
 
-  const runImport = async (kind: ImportKind) => {
+  const handleAddDiff = async (request: AddDiffRequest) => {
     setError(null);
-    setPendingImportKind(kind);
-  };
-
-  const submitImport = async (values: Record<string, string>) => {
-    if (!pendingImportKind) return;
-    setError(null);
+    setIsImporting(true);
     try {
-      setIsImporting(true);
-      let diffsetId: string | null = null;
-      if (pendingImportKind === "gitWorking") {
-        const repoPath = values.repoPath.trim();
-        diffsetId = await api.importGitWorkingTree(repoPath);
-      } else if (pendingImportKind === "gitCommit") {
-        const repoPath = values.repoPath.trim();
-        const rev = values.rev.trim();
-        diffsetId = await api.importGitCommit(repoPath, rev);
-      } else {
-        const change = values.change.trim();
-        const cwd = values.cwd.trim() || undefined;
-        if (pendingImportKind === "p4Pending") {
-          diffsetId = await api.importP4Pending(change, cwd);
-        } else if (pendingImportKind === "p4Shelved") {
-          diffsetId = await api.importP4Shelved(change, cwd);
-        } else {
-          diffsetId = await api.importP4Submitted(change, cwd);
-        }
+      let diffsetId: string;
+      switch (request.kind) {
+        case "gitWorking":
+          diffsetId = await api.importGitWorkingTree(request.repoPath ?? "");
+          break;
+        case "gitCommit":
+          diffsetId = await api.importGitCommit(request.repoPath ?? "", request.rev ?? "HEAD");
+          break;
+        case "p4Pending":
+          diffsetId = await api.importP4Pending(request.change ?? "default", request.cwd);
+          break;
+        case "p4Shelved":
+          diffsetId = await api.importP4Shelved(request.change ?? "", request.cwd);
+          break;
+        case "p4Submitted":
+          diffsetId = await api.importP4Submitted(request.change ?? "", request.cwd);
+          break;
       }
-      if (workspace) await loadDiffsets(workspace);
-      if (diffsetId) {
-        setExpanded(diffsetId);
-        const fds = await api.listFilediffs(diffsetId);
-        setFilediffs((prev) => ({ ...prev, [diffsetId]: fds }));
+
+      if (workspace) {
+        await loadDiffsets(workspace);
       }
-      setPendingImportKind(null);
+      setExpanded(diffsetId);
+      const fds = await api.listFilediffs(diffsetId);
+      setFilediffs((prev) => ({ ...prev, [diffsetId]: fds }));
+      setAddDiffVisible(false);
     } catch (err) {
       setError(String(err));
     } finally {
       setIsImporting(false);
+    }
+  };
+
+  const handleSaveDirectory = async (values: Record<string, string>) => {
+    if (!saveDirectoryProvider) return;
+    const path = values.path.trim();
+    if (!path) return;
+    try {
+      const nextSettings = await api.saveCurrentWorkspaceLocation(saveDirectoryProvider, path);
+      setSettings(nextSettings);
+      setSaveDirectoryProvider(null);
+    } catch (err) {
+      setError(String(err));
+    }
+  };
+
+  const handleSelectDirectory = async (
+    provider: DirectoryProvider,
+    locationId: string | null
+  ) => {
+    setError(null);
+    try {
+      const nextSettings = await api.selectCurrentWorkspaceLocation(provider, locationId);
+      setSettings(nextSettings);
+    } catch (err) {
+      setError(String(err));
+    }
+  };
+
+  const handleRemoveDirectory = async (
+    provider: DirectoryProvider,
+    location: SavedWorkspaceLocation | null
+  ) => {
+    if (!location) return;
+    setError(null);
+    try {
+      const nextSettings = await api.removeCurrentWorkspaceLocation(provider, location.id);
+      setSettings(nextSettings);
+    } catch (err) {
+      setError(String(err));
     }
   };
 
@@ -155,6 +221,7 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
   const refreshFromSidebar = async () => {
     if (!workspace) return;
     setError(null);
+    setIsRefreshing(true);
     try {
       await loadDiffsets(workspace, true);
       setFilediffs({});
@@ -164,6 +231,8 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
       }
     } catch (err) {
       setError(String(err));
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -172,27 +241,50 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
       <div className="sidebar-header">
         <span className="sidebar-title">{workspace?.name ?? "Loading..."}</span>
         <button
-          className="icon-button"
+          className="icon-button icon-button-compact"
           onClick={refreshFromSidebar}
           title="Refresh diffsets"
+          disabled={!workspace || isRefreshing}
         >
-          Refresh
+          {isRefreshing ? <LoadingIcon className="button-icon-spin" /> : null}
+          <span>Refresh</span>
         </button>
       </div>
 
-      <div className="sidebar-actions">
-        <button onClick={() => runImport("p4Pending")} disabled={isImporting}>P4 Pending</button>
-        <button onClick={() => runImport("p4Shelved")} disabled={isImporting}>P4 Shelved</button>
-        <button onClick={() => runImport("p4Submitted")} disabled={isImporting}>P4 Submitted</button>
-        <button onClick={() => runImport("gitWorking")} disabled={isImporting}>Git Working</button>
-        <button onClick={() => runImport("gitCommit")} disabled={isImporting}>Git Commit</button>
+      <div className="sidebar-controls">
+        <SavedDirectoryField
+          label="Current P4 Depot"
+          provider="p4"
+          locations={settings.savedP4Directories}
+          selectedLocation={selectedP4Location}
+          onSelect={handleSelectDirectory}
+          onSave={() => setSaveDirectoryProvider("p4")}
+          onRemove={() => handleRemoveDirectory("p4", selectedP4Location)}
+        />
+        <SavedDirectoryField
+          label="Current Git Directory"
+          provider="git"
+          locations={settings.savedGitDirectories}
+          selectedLocation={selectedGitLocation}
+          onSelect={handleSelectDirectory}
+          onSave={() => setSaveDirectoryProvider("git")}
+          onRemove={() => handleRemoveDirectory("git", selectedGitLocation)}
+        />
+        <button
+          type="button"
+          className="btn-merge-toggle sidebar-add-diff"
+          onClick={() => setAddDiffVisible(true)}
+        >
+          Add Diff
+        </button>
       </div>
 
       {error && <div className="sidebar-error">{error}</div>}
 
       {diffsets.length === 0 && (
         <div className="sidebar-empty">
-          No diffs yet. Import P4, Git, patch, or two-file diffs to begin.
+          No diffs yet. Save a Git or P4 directory above, then open a working tree, commit, or
+          changelist.
         </div>
       )}
 
@@ -212,72 +304,113 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
           ))}
         </section>
       ))}
+
+      <AddDiffDialog
+        visible={addDiffVisible}
+        importing={isImporting}
+        currentGitPath={selectedGitLocation?.path ?? null}
+        currentP4Path={selectedP4Location?.path ?? null}
+        onCancel={() => setAddDiffVisible(false)}
+        onSubmit={handleAddDiff}
+        loadGitCommits={(repoPath) => api.listGitCommits(repoPath)}
+        loadP4PendingChanges={(cwd) => api.listP4PendingChanges(cwd)}
+      />
+
       <FormDialog
-        visible={pendingImportKind !== null}
-        title={dialogTitle(pendingImportKind)}
-        description={dialogDescription(pendingImportKind)}
-        confirmLabel="Open"
-        onCancel={() => setPendingImportKind(null)}
-        onConfirm={submitImport}
-        fields={dialogFields(pendingImportKind)}
+        visible={saveDirectoryProvider !== null}
+        title={saveDirectoryProvider === "git" ? "Save Git Directory" : "Save P4 Workspace"}
+        description={
+          saveDirectoryProvider === "git"
+            ? "Enter the Git repository path to save and reuse."
+            : "Enter the Perforce workspace path to save and reuse."
+        }
+        confirmLabel="Save"
+        onCancel={() => setSaveDirectoryProvider(null)}
+        onConfirm={handleSaveDirectory}
+        fields={[
+          {
+            id: "path",
+            label: "Path",
+            defaultValue:
+              saveDirectoryProvider === "git"
+                ? selectedGitLocation?.path ?? ""
+                : selectedP4Location?.path ?? "",
+            placeholder:
+              saveDirectoryProvider === "git"
+                ? "Path to the Git repository"
+                : "Path inside the Perforce workspace",
+            required: true,
+          },
+        ]}
       />
     </aside>
   );
 }
 
-function dialogTitle(kind: ImportKind | null) {
-  if (kind === "gitWorking") return "Open Git Working Tree";
-  if (kind === "gitCommit") return "Open Git Commit";
-  if (kind === "p4Pending") return "Open P4 Pending Changelist";
-  if (kind === "p4Shelved") return "Open P4 Shelved Changelist";
-  if (kind === "p4Submitted") return "Open P4 Submitted Changelist";
-  return "";
+function SavedDirectoryField({
+  label,
+  provider,
+  locations,
+  selectedLocation,
+  onSelect,
+  onSave,
+  onRemove,
+}: {
+  label: string;
+  provider: DirectoryProvider;
+  locations: SavedWorkspaceLocation[];
+  selectedLocation: SavedWorkspaceLocation | null;
+  onSelect: (provider: DirectoryProvider, locationId: string | null) => Promise<void>;
+  onSave: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="sidebar-directory-card">
+      <div className="sidebar-directory-label">{label}</div>
+      <div className="sidebar-directory-row">
+        <select
+          className="sidebar-select"
+          value={selectedLocation?.id ?? ""}
+          onChange={(event) => onSelect(provider, event.target.value || null)}
+        >
+          <option value="">Directory...</option>
+          {locations.map((location) => (
+            <option key={location.id} value={location.id}>
+              {location.label}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="icon-button icon-button-square"
+          title={`Save ${label}`}
+          onClick={onSave}
+        >
+          <SaveIcon />
+        </button>
+        <button
+          type="button"
+          className="icon-button icon-button-square"
+          title={`Remove selected ${label}`}
+          onClick={onRemove}
+          disabled={!selectedLocation}
+        >
+          x
+        </button>
+      </div>
+      <div className="sidebar-directory-path" title={selectedLocation?.path ?? ""}>
+        {selectedLocation?.path ?? "No saved directory selected"}
+      </div>
+    </div>
+  );
 }
 
-function dialogDescription(kind: ImportKind | null) {
-  if (kind === "gitWorking") return "Enter the Git repository path to open.";
-  if (kind === "gitCommit") return "Enter the Git repository path and revision to open.";
-  return "Enter the changelist number and optional workspace path.";
-}
-
-function dialogFields(kind: ImportKind | null): FormDialogField[] {
-  if (kind === "gitWorking" || kind === "gitCommit") {
-    const fields: FormDialogField[] = [
-      {
-        id: "repoPath",
-        label: "Repository",
-        defaultValue: ".",
-        placeholder: "Path to the Git repository",
-        required: true,
-      },
-    ];
-    if (kind === "gitCommit") {
-      fields.push({
-        id: "rev",
-        label: "Revision",
-        defaultValue: "HEAD",
-        placeholder: "Commit SHA, branch, or revision",
-        required: true,
-      });
-    }
-    return fields;
-  }
-
-  return [
-    {
-      id: "change",
-      label: "Changelist",
-      defaultValue: kind === "p4Pending" ? "default" : "",
-      placeholder: kind === "p4Pending" ? "default or 12345" : "12345",
-      required: true,
-    },
-    {
-      id: "cwd",
-      label: "Workspace",
-      defaultValue: "",
-      placeholder: "Optional workspace path",
-    },
-  ];
+function findSelectedLocation(
+  locations: SavedWorkspaceLocation[],
+  selectedId: string | null
+) {
+  if (!selectedId) return null;
+  return locations.find((location) => location.id === selectedId) ?? null;
 }
 
 function DiffSetRow({
