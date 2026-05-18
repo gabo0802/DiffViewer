@@ -477,6 +477,10 @@ html, body, #root {
   background: var(--bg);
 }
 
+.diff-editor-col-full {
+  flex: 1 1 100%;
+}
+
 .editor-label {
   padding: 4px 10px;
   font-size: 11px;
