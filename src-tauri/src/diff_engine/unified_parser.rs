@@ -161,10 +161,7 @@ fn parse_hunk_header(line: &str) -> Option<(usize, usize, usize, usize)> {
 
 fn parse_range(range: &str) -> (usize, usize) {
     if let Some((start, count)) = range.split_once(',') {
-        (
-            start.parse().unwrap_or(1),
-            count.parse().unwrap_or(0),
-        )
+        (start.parse().unwrap_or(1), count.parse().unwrap_or(0))
     } else {
         (range.parse().unwrap_or(1), 1)
     }

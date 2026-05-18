@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
+use sha2::{Digest, Sha256};
 use std::fs;
-use sha2::{Sha256, Digest};
+use std::path::{Path, PathBuf};
 
 /// Snapshot cache directory.
 pub fn snapshot_dir() -> PathBuf {
@@ -47,7 +47,12 @@ pub fn snapshot_file(path: &Path) -> Result<(String, String, i64, String), Strin
     let snap_id = uuid::Uuid::new_v4().to_string();
     let cache_path = snapshot_dir().join(&snap_id);
     fs::write(&cache_path, &bytes).map_err(|e| format!("Failed to write snapshot: {}", e))?;
-    Ok((snap_id, hash, size, cache_path.to_string_lossy().into_owned()))
+    Ok((
+        snap_id,
+        hash,
+        size,
+        cache_path.to_string_lossy().into_owned(),
+    ))
 }
 
 /// Read snapshot content by cache path.
@@ -75,7 +80,11 @@ pub fn atomic_write(target: &Path, content: &[u8]) -> Result<(), String> {
 
 /// Detect line ending style from existing file content.
 pub fn detect_eol(content: &str) -> &'static str {
-    if content.contains("\r\n") { "\r\n" } else { "\n" }
+    if content.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    }
 }
 
 fn hex_sha256(data: &[u8]) -> String {

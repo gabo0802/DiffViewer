@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::twoway::AlignmentRow;
+use serde::{Deserialize, Serialize};
 
 /// The rendered diff model sent to the UI.
 #[derive(Debug, Clone, Serialize, Deserialize)]

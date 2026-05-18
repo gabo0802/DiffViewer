@@ -15,7 +15,9 @@ pub fn apply_hunk_to_buffer(
     let merged_lines: Vec<String> = merged.lines().map(|l| l.to_string()).collect();
 
     // Determine which lines to insert based on source
-    let insert_lines: Vec<&str> = hunk.lines.iter()
+    let insert_lines: Vec<&str> = hunk
+        .lines
+        .iter()
         .filter(|l| match source {
             "left" => l.kind == "del" || l.kind == "context",
             "right" => l.kind == "add" || l.kind == "context",
@@ -25,7 +27,11 @@ pub fn apply_hunk_to_buffer(
         .collect();
 
     // Replace at the hunk position in merged buffer (using new_start since merged starts as right-side)
-    let start = if hunk.new_start > 0 { hunk.new_start - 1 } else { 0 };
+    let start = if hunk.new_start > 0 {
+        hunk.new_start - 1
+    } else {
+        0
+    };
     let end = (start + hunk.new_count).min(merged_lines.len());
 
     let mut result = Vec::new();

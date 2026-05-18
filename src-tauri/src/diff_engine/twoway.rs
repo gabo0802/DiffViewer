@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::unified_parser::{Hunk, HunkLine};
+use serde::{Deserialize, Serialize};
 
 /// Compute hunks by comparing two texts line-by-line (simple LCS-based diff).
 pub fn compute_hunks(left: &str, right: &str) -> Vec<Hunk> {
@@ -105,25 +105,41 @@ fn build_hunks_from_edits(edits: &[Edit], context: usize) -> Vec<Hunk> {
         let mut new_start = 1usize;
         for e in edits.iter().take(range_start) {
             match e {
-                Edit::Keep(_) => { old_start += 1; new_start += 1; }
-                Edit::Del(_) => { old_start += 1; }
-                Edit::Add(_) => { new_start += 1; }
+                Edit::Keep(_) => {
+                    old_start += 1;
+                    new_start += 1;
+                }
+                Edit::Del(_) => {
+                    old_start += 1;
+                }
+                Edit::Add(_) => {
+                    new_start += 1;
+                }
             }
         }
 
         for e in edits.iter().take(range_end + 1).skip(range_start) {
             match e {
                 Edit::Keep(t) => {
-                    lines.push(HunkLine { kind: "context".to_string(), text: t.clone() });
+                    lines.push(HunkLine {
+                        kind: "context".to_string(),
+                        text: t.clone(),
+                    });
                     old_line += 1;
                     new_line += 1;
                 }
                 Edit::Del(t) => {
-                    lines.push(HunkLine { kind: "del".to_string(), text: t.clone() });
+                    lines.push(HunkLine {
+                        kind: "del".to_string(),
+                        text: t.clone(),
+                    });
                     old_line += 1;
                 }
                 Edit::Add(t) => {
-                    lines.push(HunkLine { kind: "add".to_string(), text: t.clone() });
+                    lines.push(HunkLine {
+                        kind: "add".to_string(),
+                        text: t.clone(),
+                    });
                     new_line += 1;
                 }
             }
@@ -159,7 +175,11 @@ pub struct AlignmentCell {
 }
 
 /// Build alignment rows from hunks (for side-by-side display).
-pub fn build_alignment_rows(left_text: &str, right_text: &str, hunks: &[Hunk]) -> Vec<AlignmentRow> {
+pub fn build_alignment_rows(
+    left_text: &str,
+    right_text: &str,
+    hunks: &[Hunk],
+) -> Vec<AlignmentRow> {
     let left_lines: Vec<&str> = left_text.lines().collect();
     let right_lines: Vec<&str> = right_text.lines().collect();
 
@@ -169,8 +189,16 @@ pub fn build_alignment_rows(left_text: &str, right_text: &str, hunks: &[Hunk]) -
     let mut row_counter = 0usize;
 
     for hunk in hunks {
-        let hunk_old_start = if hunk.old_start > 0 { hunk.old_start - 1 } else { 0 };
-        let hunk_new_start = if hunk.new_start > 0 { hunk.new_start - 1 } else { 0 };
+        let hunk_old_start = if hunk.old_start > 0 {
+            hunk.old_start - 1
+        } else {
+            0
+        };
+        let hunk_new_start = if hunk.new_start > 0 {
+            hunk.new_start - 1
+        } else {
+            0
+        };
 
         // Context lines before hunk
         while left_idx < hunk_old_start && right_idx < hunk_new_start {
@@ -201,8 +229,15 @@ pub fn build_alignment_rows(left_text: &str, right_text: &str, hunks: &[Hunk]) -
             match hl.kind.as_str() {
                 "del" => {
                     if !add_lines.is_empty() {
-                        emit_paired_rows(&mut rows, &mut row_counter, &del_lines, &add_lines,
-                            &mut left_idx, &mut right_idx, &hunk.id);
+                        emit_paired_rows(
+                            &mut rows,
+                            &mut row_counter,
+                            &del_lines,
+                            &add_lines,
+                            &mut left_idx,
+                            &mut right_idx,
+                            &hunk.id,
+                        );
                         del_lines.clear();
                         add_lines.clear();
                     }
@@ -214,8 +249,15 @@ pub fn build_alignment_rows(left_text: &str, right_text: &str, hunks: &[Hunk]) -
                 _ => {
                     // Flush del/add
                     if !del_lines.is_empty() || !add_lines.is_empty() {
-                        emit_paired_rows(&mut rows, &mut row_counter, &del_lines, &add_lines,
-                            &mut left_idx, &mut right_idx, &hunk.id);
+                        emit_paired_rows(
+                            &mut rows,
+                            &mut row_counter,
+                            &del_lines,
+                            &add_lines,
+                            &mut left_idx,
+                            &mut right_idx,
+                            &hunk.id,
+                        );
                         del_lines.clear();
                         add_lines.clear();
                     }
@@ -242,8 +284,15 @@ pub fn build_alignment_rows(left_text: &str, right_text: &str, hunks: &[Hunk]) -
         }
         // Flush remaining
         if !del_lines.is_empty() || !add_lines.is_empty() {
-            emit_paired_rows(&mut rows, &mut row_counter, &del_lines, &add_lines,
-                &mut left_idx, &mut right_idx, &hunk.id);
+            emit_paired_rows(
+                &mut rows,
+                &mut row_counter,
+                &del_lines,
+                &add_lines,
+                &mut left_idx,
+                &mut right_idx,
+                &hunk.id,
+            );
         }
     }
 
@@ -260,7 +309,9 @@ pub fn build_alignment_rows(left_text: &str, right_text: &str, hunks: &[Hunk]) -
                 };
                 left_idx += 1;
                 Some(cell)
-            } else { None },
+            } else {
+                None
+            },
             right: if right_idx < right_lines.len() {
                 let cell = AlignmentCell {
                     line_no: right_idx + 1,
@@ -269,7 +320,9 @@ pub fn build_alignment_rows(left_text: &str, right_text: &str, hunks: &[Hunk]) -
                 };
                 right_idx += 1;
                 Some(cell)
-            } else { None },
+            } else {
+                None
+            },
             hunk_id: None,
         });
     }
@@ -297,7 +350,11 @@ fn emit_paired_rows(
                 kind: "del".to_string(),
             })
         } else {
-            Some(AlignmentCell { line_no: 0, text: String::new(), kind: "empty".to_string() })
+            Some(AlignmentCell {
+                line_no: 0,
+                text: String::new(),
+                kind: "empty".to_string(),
+            })
         };
         let right = if i < add_lines.len() {
             *right_idx += 1;
@@ -307,7 +364,11 @@ fn emit_paired_rows(
                 kind: "add".to_string(),
             })
         } else {
-            Some(AlignmentCell { line_no: 0, text: String::new(), kind: "empty".to_string() })
+            Some(AlignmentCell {
+                line_no: 0,
+                text: String::new(),
+                kind: "empty".to_string(),
+            })
         };
         rows.push(AlignmentRow {
             row_id: format!("row-{}", row_counter),

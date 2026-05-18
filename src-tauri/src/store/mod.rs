@@ -1,6 +1,6 @@
 pub mod migrations;
 
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -141,7 +141,8 @@ pub fn list_workspaces(conn: &Connection) -> Result<Vec<Workspace>, String> {
             })
         })
         .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
 pub fn create_workspace(conn: &Connection, name: &str) -> Result<Workspace, String> {
@@ -151,7 +152,13 @@ pub fn create_workspace(conn: &Connection, name: &str) -> Result<Workspace, Stri
         "INSERT INTO workspaces (workspace_id, name, created_at, last_opened_at, settings_json) VALUES (?1,?2,?3,?4,?5)",
         params![id, name, now, now, "{}"],
     ).map_err(|e| e.to_string())?;
-    Ok(Workspace { workspace_id: id, name: name.to_string(), created_at: now, last_opened_at: now, settings_json: "{}".to_string() })
+    Ok(Workspace {
+        workspace_id: id,
+        name: name.to_string(),
+        created_at: now,
+        last_opened_at: now,
+        settings_json: "{}".to_string(),
+    })
 }
 
 pub fn insert_diffset(conn: &Connection, ds: &DiffSet) -> Result<(), String> {
@@ -180,7 +187,8 @@ pub fn list_diffsets(conn: &Connection, workspace_id: &str) -> Result<Vec<DiffSe
             })
         })
         .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
 pub fn get_diffset(conn: &Connection, diffset_id: &str) -> Result<DiffSet, String> {
@@ -231,7 +239,8 @@ pub fn delete_filediffs_for_diffset(conn: &Connection, diffset_id: &str) -> Resu
     conn.execute(
         "DELETE FROM filediffs WHERE diffset_id = ?1",
         params![diffset_id],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -256,7 +265,8 @@ pub fn list_filediffs(conn: &Connection, diffset_id: &str) -> Result<Vec<FileDif
             })
         })
         .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
 pub fn get_filediff(conn: &Connection, filediff_id: &str) -> Result<FileDiff, String> {
@@ -325,6 +335,7 @@ pub fn delete_diffset(conn: &Connection, diffset_id: &str) -> Result<(), String>
     conn.execute(
         "DELETE FROM diffsets WHERE diffset_id = ?1",
         params![diffset_id],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
