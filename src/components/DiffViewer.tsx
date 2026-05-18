@@ -73,9 +73,12 @@ export default function DiffViewer({
       if (!model || model.hunks.length === 0) return;
       setCurrentHunkIdx((prev) => {
         const next = prev + dir;
-        if (next < 0) return model.hunks.length - 1;
-        if (next >= model.hunks.length) return 0;
-        return next;
+        const wrapped =
+          next < 0 ? model.hunks.length - 1 : next >= model.hunks.length ? 0 : next;
+        if (wrapped === prev) {
+          revealAlignedLine(model.hunks[wrapped].start_row + 1);
+        }
+        return wrapped;
       });
     },
     [model]
