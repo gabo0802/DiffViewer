@@ -33,6 +33,7 @@ pub fn parse_unified_diff(patch: &str) -> Vec<PatchFileDiff> {
     let mut current_file: Option<PatchFileDiff> = None;
     let mut current_hunk: Option<Hunk> = None;
     let mut hunk_counter: usize = 0;
+    let mut current_file_from_p4_header = false;
 
     for line in patch.lines() {
         if line.starts_with("diff --git ") {
@@ -44,8 +45,8 @@ pub fn parse_unified_diff(patch: &str) -> Vec<PatchFileDiff> {
             if let Some(f) = current_file.take() {
                 files.push(f);
             }
-        } else if line.starts_with("--- ") {
-            // Flush previous hunk/file
+            current_file_from_p4_header = false;
+        } else if let Some((old_path, new_path)) = parse_p4_section_header(line) {
             if let Some(ref mut f) = current_file {
                 if let Some(h) = current_hunk.take() {
                     f.hunks.push(h);
@@ -54,15 +55,39 @@ pub fn parse_unified_diff(patch: &str) -> Vec<PatchFileDiff> {
             if let Some(f) = current_file.take() {
                 files.push(f);
             }
-            let old_path = parse_diff_header_path(&line[4..]);
-            let old_path = strip_prefix_ab(&old_path);
             current_file = Some(PatchFileDiff {
                 old_path,
-                new_path: String::new(),
+                new_path,
                 hunks: Vec::new(),
                 status: "modified".to_string(),
             });
             current_hunk = None;
+            current_file_from_p4_header = true;
+        } else if line.starts_with("--- ") {
+            if current_file_from_p4_header {
+                if let Some(ref mut f) = current_file {
+                    f.old_path = strip_prefix_ab(&parse_diff_header_path(&line[4..]));
+                }
+            } else {
+                // Flush previous hunk/file
+                if let Some(ref mut f) = current_file {
+                    if let Some(h) = current_hunk.take() {
+                        f.hunks.push(h);
+                    }
+                }
+                if let Some(f) = current_file.take() {
+                    files.push(f);
+                }
+                let old_path = parse_diff_header_path(&line[4..]);
+                let old_path = strip_prefix_ab(&old_path);
+                current_file = Some(PatchFileDiff {
+                    old_path,
+                    new_path: String::new(),
+                    hunks: Vec::new(),
+                    status: "modified".to_string(),
+                });
+                current_hunk = None;
+            }
         } else if line.starts_with("+++ ") {
             if let Some(ref mut f) = current_file {
                 let new_path = parse_diff_header_path(&line[4..]);
@@ -76,6 +101,7 @@ pub fn parse_unified_diff(patch: &str) -> Vec<PatchFileDiff> {
                     f.status = "renamed".to_string();
                 }
             }
+            current_file_from_p4_header = false;
         } else if line.starts_with("@@ ") {
             // Flush previous hunk
             if let Some(ref mut f) = current_file {
@@ -171,6 +197,25 @@ fn parse_diff_header_path(raw: &str) -> String {
     }
 
     trimmed.to_string()
+}
+
+fn parse_p4_section_header(line: &str) -> Option<(String, String)> {
+    let body = line.strip_prefix("==== ")?.strip_suffix(" ====")?.trim();
+    if let Some((old_path, new_path)) = body.split_once(" - ") {
+        return Some((
+            parse_p4_section_path(old_path),
+            parse_p4_section_path(new_path),
+        ));
+    }
+
+    let path = parse_p4_section_path(body);
+    Some((path.clone(), path))
+}
+
+fn parse_p4_section_path(raw: &str) -> String {
+    raw.split_once(" (")
+        .map(|(path, _)| path.trim_end().to_string())
+        .unwrap_or_else(|| raw.trim().to_string())
 }
 
 fn looks_like_diff_timestamp(value: &str) -> bool {
@@ -336,6 +381,31 @@ Differences ...
             files[0].new_path,
             "E:\\OnlineBranches\\gs_fb_cfb_dl\\FootballTools\\cstudio\\src\\cstudio.env"
         );
+        assert_eq!(files[0].hunks.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_p4_describe_diff_without_dash_headers() {
+        let patch = "\
+Change 2136690 by dev@workspace on 2026/05/08 06:31:39
+
+Affected files ...
+
+... //depot/main/foo.cpp#52 edit
+
+Differences ...
+
+==== //depot/main/foo.cpp#52 (text) ====
+
+@@ -1,2 +1,2 @@
+ old
+-line
++line changed
+";
+        let files = parse_unified_diff(patch);
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].old_path, "//depot/main/foo.cpp#52");
+        assert_eq!(files[0].new_path, "//depot/main/foo.cpp#52");
         assert_eq!(files[0].hunks.len(), 1);
     }
 }
