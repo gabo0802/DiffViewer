@@ -35,6 +35,7 @@ export default function DiffViewer({
   const lastReportedTopRowRef = useRef(1);
   const lastAppliedSyncTokenRef = useRef(0);
   const editorLanguage = resolveEditorLanguage(fileDiff, editorPreferences);
+  const showSinglePane = isAddedFileDiff(fileDiff);
 
   useEffect(() => {
     setModel(null);
@@ -190,28 +191,30 @@ export default function DiffViewer({
 
         {!loadError && model && model.rows.length > 0 && (
           <>
-            <div className="diff-editor-col">
-              <div className="editor-label">{fileDiff.left_label || "Left"}</div>
-              <Editor
-                key={`left-${fileDiff.filediff_id}-${model.rows.length}`}
-                height="100%"
-                language={editorLanguage}
-                theme={theme === "dark" ? "vs-dark" : "vs"}
-                value={leftText}
-                onMount={decorateOnMount("left")}
-                options={{
-                  readOnly: true,
-                  minimap: { enabled: false },
-                  lineNumbers: "on",
-                  scrollBeyondLastLine: false,
-                  renderLineHighlight: "none",
-                  tabSize: editorPreferences.tabSize,
-                  insertSpaces: editorPreferences.insertSpaces,
-                  wordWrap: editorPreferences.wordWrap,
-                }}
-              />
-            </div>
-            <div className="diff-editor-col">
+            {!showSinglePane && (
+              <div className="diff-editor-col">
+                <div className="editor-label">{fileDiff.left_label || "Left"}</div>
+                <Editor
+                  key={`left-${fileDiff.filediff_id}-${model.rows.length}`}
+                  height="100%"
+                  language={editorLanguage}
+                  theme={theme === "dark" ? "vs-dark" : "vs"}
+                  value={leftText}
+                  onMount={decorateOnMount("left")}
+                  options={{
+                    readOnly: true,
+                    minimap: { enabled: false },
+                    lineNumbers: "on",
+                    scrollBeyondLastLine: false,
+                    renderLineHighlight: "none",
+                    tabSize: editorPreferences.tabSize,
+                    insertSpaces: editorPreferences.insertSpaces,
+                    wordWrap: editorPreferences.wordWrap,
+                  }}
+                />
+              </div>
+            )}
+            <div className={`diff-editor-col ${showSinglePane ? "diff-editor-col-full" : ""}`}>
               <div className="editor-label">{fileDiff.right_label || "Right"}</div>
               <Editor
                 key={`right-${fileDiff.filediff_id}-${model.rows.length}`}
@@ -286,4 +289,9 @@ function gutterClassForRow(row: AlignmentRow, side: "left" | "right") {
   if (kind === "add") return "diff-gutter-add";
   if (kind === "del") return "diff-gutter-del";
   return undefined;
+}
+
+function isAddedFileDiff(fileDiff: FileDiff) {
+  const status = fileDiff.status.toLowerCase();
+  return status === "add" || status === "added";
 }
