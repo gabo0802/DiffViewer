@@ -221,7 +221,7 @@ pub fn build_alignment_rows(
             right_idx += 1;
         }
 
-        // Hunk lines — group del/add for side-by-side alignment
+        // Hunk lines: group del/add for side-by-side alignment.
         let mut del_lines: Vec<&HunkLine> = Vec::new();
         let mut add_lines: Vec<&HunkLine> = Vec::new();
 

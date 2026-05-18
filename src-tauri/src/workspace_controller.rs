@@ -1,6 +1,7 @@
 use rusqlite::Connection;
 use std::path::PathBuf;
 
+use crate::content_source::{ContentSource, WriteTarget};
 use crate::debugging::DebugLogger;
 use crate::diff_engine::{twoway, unified_parser};
 use crate::io;
@@ -23,8 +24,11 @@ pub fn import_patch(
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "Imported Patch".to_string());
 
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(|err| err.to_string())?;
     store::insert_diffset(
-        conn,
+        &tx,
         &DiffSet {
             diffset_id: diffset_id.clone(),
             workspace_id: workspace_id.to_string(),
@@ -45,10 +49,8 @@ pub fn import_patch(
         // For patch imports: content sources are virtual (from patch text)
         let left_text = reconstruct_old_text(pf);
         let right_text = reconstruct_new_text(pf);
-        let content_left_json =
-            serde_json::json!({ "type": "virtual", "text": left_text }).to_string();
-        let content_right_json =
-            serde_json::json!({ "type": "virtual", "text": right_text }).to_string();
+        let content_left_json = ContentSource::virtual_text(left_text).to_json_string();
+        let content_right_json = ContentSource::virtual_text(right_text).to_json_string();
         let display_path = pf.new_path.clone();
         DebugLogger::new("workspace").log_diff_line_counts(
             &display_path,
@@ -57,7 +59,7 @@ pub fn import_patch(
         );
 
         store::insert_filediff(
-            conn,
+            &tx,
             &FileDiff {
                 filediff_id,
                 diffset_id: diffset_id.clone(),
@@ -68,12 +70,13 @@ pub fn import_patch(
                 content_left_json,
                 content_right_json,
                 hunks_json,
-                write_target_json: serde_json::json!({ "type": "save_as_required" }).to_string(),
+                write_target_json: WriteTarget::SaveAsRequired.to_json_string(),
                 created_at: now,
             },
         )?;
     }
 
+    tx.commit().map_err(|err| err.to_string())?;
     Ok(diffset_id)
 }
 
@@ -95,8 +98,11 @@ pub fn compare_two_files(
     let (rs_id, rs_hash, rs_size, rs_cache) = io::snapshot_file(&right_resolved)?;
 
     let now = chrono::Utc::now().timestamp();
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(|err| err.to_string())?;
     store::insert_snapshot(
-        conn,
+        &tx,
         &Snapshot {
             snapshot_id: ls_id.clone(),
             sha256: ls_hash,
@@ -106,7 +112,7 @@ pub fn compare_two_files(
         },
     )?;
     store::insert_snapshot(
-        conn,
+        &tx,
         &Snapshot {
             snapshot_id: rs_id.clone(),
             sha256: rs_hash,
@@ -123,7 +129,7 @@ pub fn compare_two_files(
     let display_title = title.unwrap_or("Two-way compare");
 
     store::insert_diffset(
-        conn,
+        &tx,
         &DiffSet {
             diffset_id: diffset_id.clone(),
             workspace_id: workspace_id.to_string(),
@@ -149,10 +155,8 @@ pub fn compare_two_files(
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let content_left_json =
-        serde_json::json!({ "type": "snapshot", "snapshot_id": ls_id }).to_string();
-    let content_right_json =
-        serde_json::json!({ "type": "snapshot", "snapshot_id": rs_id }).to_string();
+    let content_left_json = ContentSource::snapshot(ls_id).to_json_string();
+    let content_right_json = ContentSource::snapshot(rs_id).to_json_string();
     DebugLogger::new("workspace").log_diff_line_counts(
         &right_name,
         &content_left_json,
@@ -160,7 +164,7 @@ pub fn compare_two_files(
     );
 
     store::insert_filediff(
-        conn,
+        &tx,
         &FileDiff {
             filediff_id,
             diffset_id: diffset_id.clone(),
@@ -171,13 +175,12 @@ pub fn compare_two_files(
             content_left_json,
             content_right_json,
             hunks_json,
-            write_target_json:
-                serde_json::json!({ "type": "path", "path": right_resolved.to_string_lossy() })
-                    .to_string(),
+            write_target_json: WriteTarget::path(right_resolved.to_string_lossy()).to_json_string(),
             created_at: now,
         },
     )?;
 
+    tx.commit().map_err(|err| err.to_string())?;
     Ok(diffset_id)
 }
 
@@ -204,7 +207,7 @@ fn resolve_input_path(input: &str) -> PathBuf {
     p
 }
 
-// ── Helpers ──
+// Helpers
 
 fn reconstruct_old_text(pf: &unified_parser::PatchFileDiff) -> String {
     let mut lines = Vec::new();

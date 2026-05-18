@@ -1,11 +1,17 @@
 use rusqlite::Connection;
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
 
+use crate::content_source::{ContentSource, WriteTarget};
 use crate::debugging::DebugLogger;
 use crate::diff_engine::unified_parser::{self, PatchFileDiff};
 use crate::store::{self, DiffSet, FileDiff};
+
+mod p4_config;
+mod process;
+
+use p4_config::{load_p4_config, P4Config};
+use process::{run_command, run_p4, run_p4_owned};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct P4OpenedFile {
@@ -20,15 +26,6 @@ struct P4DescribeFile {
     depot_path: String,
     rev: Option<u32>,
     action: String,
-}
-
-#[derive(Debug, Clone, Default)]
-struct P4Config {
-    client: Option<String>,
-    port: Option<String>,
-    user: Option<String>,
-    charset: Option<String>,
-    source_path: Option<PathBuf>,
 }
 
 pub fn import_git_working_tree(
@@ -500,9 +497,12 @@ fn import_parsed_diff_text(
 ) -> Result<String, String> {
     let now = chrono::Utc::now().timestamp();
     let diffset_id = uuid::Uuid::new_v4().to_string();
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(|err| err.to_string())?;
 
     store::insert_diffset(
-        conn,
+        &tx,
         &DiffSet {
             diffset_id: diffset_id.clone(),
             workspace_id: workspace_id.to_string(),
@@ -517,7 +517,7 @@ fn import_parsed_diff_text(
 
     for pf in parsed {
         insert_patch_file_diff(
-            conn,
+            &tx,
             &diffset_id,
             pf,
             &descriptor.left_label,
@@ -528,6 +528,7 @@ fn import_parsed_diff_text(
         )?;
     }
 
+    tx.commit().map_err(|err| err.to_string())?;
     Ok(diffset_id)
 }
 
@@ -567,12 +568,15 @@ fn replace_diffset_contents(
         source_meta_json: source_meta.to_string(),
         created_at: diffset.created_at,
     };
-    store::update_diffset(conn, &updated)?;
-    store::delete_filediffs_for_diffset(conn, &diffset.diffset_id)?;
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(|err| err.to_string())?;
+    store::update_diffset(&tx, &updated)?;
+    store::delete_filediffs_for_diffset(&tx, &diffset.diffset_id)?;
 
     for pf in &parsed {
         insert_patch_file_diff(
-            conn,
+            &tx,
             &diffset.diffset_id,
             pf,
             &left_label,
@@ -583,6 +587,7 @@ fn replace_diffset_contents(
         )?;
     }
 
+    tx.commit().map_err(|err| err.to_string())?;
     Ok(())
 }
 
@@ -630,7 +635,7 @@ fn insert_patch_file_diff(
             content_left_json,
             content_right_json,
             hunks_json,
-            write_target_json: write_target.to_string(),
+            write_target_json: write_target.to_json_string(),
             created_at: now,
         },
     )
@@ -655,14 +660,12 @@ fn derive_content_sources(
                 git_show_file(repo_path, old_rel)?
             };
             let right_json = if pf.new_path == "/dev/null" || !right_abs.exists() {
-                serde_json::json!({ "type": "virtual", "text": reconstruct_new_text(pf) })
-                    .to_string()
+                ContentSource::virtual_text(reconstruct_new_text(pf)).to_json_string()
             } else {
-                serde_json::json!({ "type": "path", "path": right_abs.to_string_lossy() })
-                    .to_string()
+                ContentSource::path(right_abs.to_string_lossy()).to_json_string()
             };
             Ok((
-                serde_json::json!({ "type": "virtual", "text": left_text }).to_string(),
+                ContentSource::virtual_text(left_text).to_json_string(),
                 right_json,
             ))
         }
@@ -688,29 +691,27 @@ fn derive_content_sources(
                 git_show_file_at_rev(repo_path, rev, new_rel)?
             };
             Ok((
-                serde_json::json!({ "type": "virtual", "text": left_text }).to_string(),
-                serde_json::json!({ "type": "virtual", "text": right_text }).to_string(),
+                ContentSource::virtual_text(left_text).to_json_string(),
+                ContentSource::virtual_text(right_text).to_json_string(),
             ))
         }
         WriteTargetMode::P4Pending { cwd, config } => {
             let left_json = if pf.old_path == "/dev/null" {
-                serde_json::json!({ "type": "virtual", "text": "" }).to_string()
+                ContentSource::virtual_text("").to_json_string()
             } else if pf.old_path.starts_with("//") {
-                serde_json::json!({ "type": "virtual", "text": p4_print_file(&pf.old_path, cwd.as_deref(), config)? }).to_string()
+                ContentSource::virtual_text(p4_print_file(&pf.old_path, cwd.as_deref(), config)?)
+                    .to_json_string()
             } else {
-                serde_json::json!({ "type": "virtual", "text": reconstruct_old_text(pf) })
-                    .to_string()
+                ContentSource::virtual_text(reconstruct_old_text(pf)).to_json_string()
             };
             let right_json = if let Some(local_path) = pending_local_path(pf, cwd.as_deref()) {
                 if Path::new(&local_path).exists() {
-                    serde_json::json!({ "type": "path", "path": local_path }).to_string()
+                    ContentSource::path(local_path).to_json_string()
                 } else {
-                    serde_json::json!({ "type": "virtual", "text": reconstruct_new_text(pf) })
-                        .to_string()
+                    ContentSource::virtual_text(reconstruct_new_text(pf)).to_json_string()
                 }
             } else {
-                serde_json::json!({ "type": "virtual", "text": reconstruct_new_text(pf) })
-                    .to_string()
+                ContentSource::virtual_text(reconstruct_new_text(pf)).to_json_string()
             };
             Ok((left_json, right_json))
         }
@@ -730,8 +731,8 @@ fn derive_content_sources(
                 reconstruct_new_text(pf)
             };
             Ok((
-                serde_json::json!({ "type": "virtual", "text": left_text }).to_string(),
-                serde_json::json!({ "type": "virtual", "text": right_text }).to_string(),
+                ContentSource::virtual_text(left_text).to_json_string(),
+                ContentSource::virtual_text(right_text).to_json_string(),
             ))
         }
     }
@@ -741,21 +742,21 @@ fn derive_write_target(
     mode: &WriteTargetMode,
     pf: &PatchFileDiff,
     display_path: &str,
-) -> serde_json::Value {
+) -> WriteTarget {
     match mode {
         WriteTargetMode::GitWorkingTree { repo_path } => {
             let resolved = Path::new(repo_path).join(display_path);
-            serde_json::json!({ "type": "path", "path": resolved.to_string_lossy() })
+            WriteTarget::path(resolved.to_string_lossy())
         }
-        WriteTargetMode::GitCommit { .. } => serde_json::json!({ "type": "save_as_required" }),
+        WriteTargetMode::GitCommit { .. } => WriteTarget::SaveAsRequired,
         WriteTargetMode::P4Pending { cwd, .. } => {
             if let Some(local_path) = pending_local_path(pf, cwd.as_deref()) {
-                serde_json::json!({ "type": "path", "path": local_path })
+                WriteTarget::path(local_path)
             } else {
-                serde_json::json!({ "type": "save_as_required" })
+                WriteTarget::SaveAsRequired
             }
         }
-        WriteTargetMode::P4ReadOnly { .. } => serde_json::json!({ "type": "read_only" }),
+        WriteTargetMode::P4ReadOnly { .. } => WriteTarget::ReadOnly,
     }
 }
 
@@ -818,10 +819,8 @@ fn add_opened_files_without_diffs(
                 write_target_json: file
                     .local_path
                     .as_ref()
-                    .map(|path| serde_json::json!({ "type": "path", "path": path }).to_string())
-                    .unwrap_or_else(|| {
-                        serde_json::json!({ "type": "save_as_required" }).to_string()
-                    }),
+                    .map(|path| WriteTarget::path(path).to_json_string())
+                    .unwrap_or_else(|| WriteTarget::SaveAsRequired.to_json_string()),
                 created_at: now,
             },
         )?;
@@ -831,11 +830,11 @@ fn add_opened_files_without_diffs(
 }
 
 fn pending_no_diff_filediff_payload(file: &P4OpenedFile) -> (String, String, String) {
-    let empty_json = serde_json::json!({ "type": "virtual", "text": "" }).to_string();
+    let empty_json = ContentSource::virtual_text("").to_json_string();
     let right_json = file
         .local_path
         .as_ref()
-        .map(|path| serde_json::json!({ "type": "path", "path": path }).to_string())
+        .map(|path| ContentSource::path(path).to_json_string())
         .unwrap_or_else(|| empty_json.clone());
 
     match file.action.as_str() {
@@ -843,7 +842,7 @@ fn pending_no_diff_filediff_payload(file: &P4OpenedFile) -> (String, String, Str
         _ => (
             format!("{} no-diff", file.action),
             empty_json,
-            serde_json::json!({ "type": "virtual", "text": "" }).to_string(),
+            ContentSource::virtual_text("").to_json_string(),
         ),
     }
 }
@@ -942,7 +941,11 @@ pub fn track_generated_p4_backup(backup_path: &Path, cwd: Option<&str>) -> Resul
     let working_cwd = cwd
         .filter(|value| !value.trim().is_empty())
         .map(str::to_string)
-        .or_else(|| backup_path.parent().map(|parent| parent.to_string_lossy().into_owned()));
+        .or_else(|| {
+            backup_path
+                .parent()
+                .map(|parent| parent.to_string_lossy().into_owned())
+        });
     let p4_config = load_p4_config(working_cwd.as_deref());
     let debug = DebugLogger::new("scm");
     debug.log(format!(
@@ -1035,7 +1038,8 @@ fn parse_p4_describe_files(output: &str) -> Vec<P4DescribeFile> {
 }
 
 fn describe_action_map(files: &[P4DescribeFile]) -> HashMap<String, String> {
-    files.iter()
+    files
+        .iter()
         .map(|file| (file.depot_path.clone(), file.action.clone()))
         .collect()
 }
@@ -1185,152 +1189,12 @@ fn first_p4_description_line(output: &str) -> Option<String> {
     None
 }
 
-fn run_command(program: &str, args: &[&str], cwd: Option<&str>) -> Result<String, String> {
-    let args = args.iter().map(|arg| arg.to_string()).collect::<Vec<_>>();
-    run_command_owned(program, &args, cwd, None)
-}
-
-fn run_p4(args: &[&str], cwd: Option<&str>, p4_config: &P4Config) -> Result<String, String> {
-    let owned = args.iter().map(|arg| arg.to_string()).collect::<Vec<_>>();
-    run_p4_owned(&owned, cwd, p4_config)
-}
-
-fn run_p4_owned(
-    args: &[String],
-    cwd: Option<&str>,
-    p4_config: &P4Config,
-) -> Result<String, String> {
-    let mut full_args = Vec::new();
-    full_args.extend(args.iter().cloned());
-    run_command_owned("p4", &full_args, cwd, Some(p4_config))
-}
-
 fn opened_args<'a>(change: &'a str, p4_config: &P4Config) -> Vec<&'a str> {
     if change == "default" || p4_config.client.is_some() {
         vec!["opened", "-c", change]
     } else {
         vec!["opened", "-a", "-c", change]
     }
-}
-
-fn load_p4_config(cwd: Option<&str>) -> P4Config {
-    let Some(cwd) = cwd.filter(|value| !value.trim().is_empty()) else {
-        return P4Config::default();
-    };
-
-    let mut current = PathBuf::from(cwd);
-    loop {
-        let candidate = current.join(".p4config");
-        if candidate.is_file() {
-            let mut config = P4Config {
-                source_path: Some(candidate.clone()),
-                ..P4Config::default()
-            };
-            if let Ok(contents) = std::fs::read_to_string(&candidate) {
-                for raw_line in contents.lines() {
-                    let line = raw_line.trim();
-                    if line.is_empty() || line.starts_with('#') {
-                        continue;
-                    }
-                    let Some((key, value)) = line.split_once('=') else {
-                        continue;
-                    };
-                    let value = value.trim().to_string();
-                    match key.trim() {
-                        "P4CLIENT" => config.client = Some(value),
-                        "P4PORT" => config.port = Some(value),
-                        "P4USER" => config.user = Some(value),
-                        "P4CHARSET" => config.charset = Some(value),
-                        _ => {}
-                    }
-                }
-            }
-            return config;
-        }
-        if !current.pop() {
-            break;
-        }
-    }
-
-    P4Config::default()
-}
-
-fn apply_p4_config_env(cmd: &mut Command, p4_config: &P4Config) {
-    if let Some(client) = p4_config
-        .client
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-    {
-        cmd.env("P4CLIENT", client);
-    }
-    if let Some(port) = p4_config
-        .port
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-    {
-        cmd.env("P4PORT", port);
-    }
-    if let Some(user) = p4_config
-        .user
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-    {
-        cmd.env("P4USER", user);
-    }
-    let charset = p4_config
-        .charset
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or("utf8");
-    cmd.env("P4CHARSET", charset);
-}
-
-fn run_command_owned(
-    program: &str,
-    args: &[String],
-    cwd: Option<&str>,
-    p4_config: Option<&P4Config>,
-) -> Result<String, String> {
-    let debug = DebugLogger::new("scm");
-    if program == "p4" {
-        debug.log(format!(
-            "command={} cwd={:?} args={} client={:?} port={:?} user={:?} config_path={:?}",
-            program,
-            cwd,
-            args.join(" "),
-            p4_config.and_then(|config| config.client.as_deref()),
-            p4_config.and_then(|config| config.port.as_deref()),
-            p4_config.and_then(|config| config.user.as_deref()),
-            p4_config.and_then(|config| config.source_path.as_ref())
-        ));
-    }
-    let mut cmd = Command::new(program);
-    cmd.args(args);
-    if let Some(cwd) = cwd.filter(|value| !value.trim().is_empty()) {
-        cmd.current_dir(cwd);
-    }
-    if let Some(p4_config) = p4_config {
-        apply_p4_config_env(&mut cmd, p4_config);
-    }
-    let output = cmd
-        .output()
-        .map_err(|e| format!("Failed to run {}: {}", program, e))?;
-    if program == "p4" {
-        debug.log(format!("status={}", output.status));
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        debug.log_multiline("stdout", &stdout);
-        debug.log_multiline("stderr", &stderr);
-    }
-    if !output.status.success() {
-        return Err(format!(
-            "{} {} failed: {}",
-            program,
-            args.join(" "),
-            String::from_utf8_lossy(&output.stderr).trim()
-        ));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
 fn display_repo_name(repo_path: &str) -> String {
@@ -1523,12 +1387,12 @@ mod tests {
         let (status, left_json, right_json) = pending_no_diff_filediff_payload(&file);
         assert_eq!(status, "added");
         assert_eq!(
-            left_json,
-            serde_json::json!({ "type": "virtual", "text": "" }).to_string()
+            serde_json::from_str::<serde_json::Value>(&left_json).unwrap(),
+            serde_json::json!({ "type": "virtual", "text": "" })
         );
         assert_eq!(
-            right_json,
-            serde_json::json!({ "type": "path", "path": "C:\\work\\new_file.cpp" }).to_string()
+            serde_json::from_str::<serde_json::Value>(&right_json).unwrap(),
+            serde_json::json!({ "type": "path", "path": "C:\\work\\new_file.cpp" })
         );
     }
 

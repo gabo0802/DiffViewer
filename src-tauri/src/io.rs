@@ -55,11 +55,6 @@ pub fn snapshot_file(path: &Path) -> Result<(String, String, i64, String), Strin
     ))
 }
 
-/// Read snapshot content by cache path.
-pub fn read_snapshot(cache_path: &str) -> Result<String, String> {
-    read_file_text(Path::new(cache_path))
-}
-
 /// Atomic write with backup. Returns the backup path when one was created.
 pub fn atomic_write(target: &Path, content: &[u8]) -> Result<Option<PathBuf>, String> {
     if let Some(parent) = target.parent() {

@@ -19,7 +19,10 @@ export function buildDisambiguatedPathLabels(
   const labels = new Map<string, string>();
 
   for (const entry of parsedEntries) {
-    labels.set(entry.id, entry.parsed.segments.at(-1) || entry.path);
+    labels.set(
+      entry.id,
+      entry.parsed.segments[entry.parsed.segments.length - 1] || entry.path
+    );
   }
 
   let changed = true;
