@@ -1422,6 +1422,35 @@ mod tests {
     }
 
     #[test]
+    fn normalizes_shelved_describe_paths_for_edit_and_add() {
+        let parsed = vec![PatchFileDiff {
+            old_path: "//depot/main/a.cpp#4".to_string(),
+            new_path: "//depot/main/a.cpp#4".to_string(),
+            hunks: Vec::new(),
+            status: "modified".to_string(),
+        }];
+        let described = vec![
+            P4DescribeFile {
+                depot_path: "//depot/main/a.cpp".to_string(),
+                rev: Some(4),
+                action: "edit".to_string(),
+            },
+            P4DescribeFile {
+                depot_path: "//depot/main/b.cpp".to_string(),
+                rev: Some(1),
+                action: "add".to_string(),
+            },
+        ];
+
+        let normalized = normalize_p4_describe_files(parsed, &described, "p4Shelved", "54321");
+        assert_eq!(normalized.len(), 2);
+        assert_eq!(normalized[0].old_path, "//depot/main/a.cpp#4");
+        assert_eq!(normalized[0].new_path, "//depot/main/a.cpp@=54321");
+        assert_eq!(normalized[1].old_path, "/dev/null");
+        assert_eq!(normalized[1].new_path, "//depot/main/b.cpp@=54321");
+    }
+
+    #[test]
     fn pending_added_file_without_unified_diff_uses_workspace_content() {
         let file = P4OpenedFile {
             depot_path: "//depot/main/new_file.cpp".to_string(),
