@@ -29,9 +29,13 @@ fn main() {
         .manage(AppState::new(conn, current_workspace_id))
         .invoke_handler(tauri::generate_handler![
             commands::workspace::get_current_workspace,
+            commands::workspace::get_current_workspace_settings,
             commands::workspace::list_workspaces,
             commands::workspace::create_workspace,
             commands::workspace::open_workspace,
+            commands::workspace::save_current_workspace_location,
+            commands::workspace::select_current_workspace_location,
+            commands::workspace::remove_current_workspace_location,
             commands::diff::import_patch,
             commands::diff::compare_two_files,
             commands::diff::import_git_working_tree,
@@ -39,6 +43,8 @@ fn main() {
             commands::diff::import_p4_pending,
             commands::diff::import_p4_shelved,
             commands::diff::import_p4_submitted,
+            commands::diff::list_git_commits,
+            commands::diff::list_p4_pending_changes,
             commands::diff::list_diffsets,
             commands::diff::list_filediffs,
             commands::diff::refresh_workspace_diffsets,

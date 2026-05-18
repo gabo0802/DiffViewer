@@ -115,25 +115,153 @@ html, body, #root {
 }
 
 .icon-button,
-.sidebar-actions button {
+.toolbar-button,
+.btn-merge-toggle,
+.diff-nav button,
+.merge-toolbar button,
+.dialog-segment-button,
+.dialog-mode-button,
+.sidebar-select,
+.dialog-field input,
+.dialog-field select {
+  font: inherit;
+}
+
+.icon-button,
+.toolbar-button,
+.btn-merge-toggle,
+.diff-nav button,
+.merge-toolbar button,
+.sidebar-select,
+.dialog-field input,
+.dialog-field select {
   background: none;
   border: 1px solid var(--border);
   color: var(--text);
-  padding: 3px 8px;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 11px;
+  border-radius: 6px;
 }
-.icon-button:hover,
-.sidebar-actions button:hover { background: var(--hover-bg); }
-.sidebar-actions button:disabled { opacity: 0.5; cursor: wait; }
 
-.sidebar-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+.icon-button,
+.toolbar-button,
+.btn-merge-toggle,
+.diff-nav button,
+.merge-toolbar button,
+.dialog-segment-button,
+.dialog-mode-button {
+  cursor: pointer;
+}
+
+.icon-button,
+.toolbar-button,
+.diff-nav button,
+.merge-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 10px 12px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.icon-button:hover,
+.toolbar-button:hover,
+.diff-nav button:hover,
+.merge-toolbar button:hover,
+.dialog-segment-button:hover,
+.dialog-mode-button:hover,
+.sidebar-select:hover {
+  background: var(--hover-bg);
+}
+
+.icon-button:disabled,
+.toolbar-button:disabled,
+.btn-merge-toggle:disabled,
+.diff-nav button:disabled,
+.merge-toolbar button:disabled,
+.dialog-segment-button:disabled,
+.dialog-mode-button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.icon-button svg,
+.toolbar-button svg,
+.btn-merge-toggle svg,
+.diff-nav button svg,
+.merge-toolbar button svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.icon-button-compact {
+  min-width: 96px;
+}
+
+.icon-button-square {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+}
+
+.button-with-icon,
+.toolbar-button-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.button-icon-spin {
+  flex: 0 0 auto;
+}
+
+.sidebar-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
   border-bottom: 1px solid var(--border);
+}
+
+.sidebar-directory-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-directory-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+}
+
+.sidebar-directory-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.sidebar-select {
+  min-width: 0;
+  padding: 7px 10px;
+  background: var(--panel-bg);
+  appearance: none;
+}
+
+.sidebar-directory-path {
+  min-height: 16px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-add-diff {
+  justify-content: center;
 }
 
 .sidebar-error {
@@ -375,9 +503,11 @@ html, body, #root {
   background: var(--accent);
   color: #fff;
   border: none;
-  padding: 4px 12px;
-  border-radius: 3px;
-  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 12px;
 }
 .btn-merge-toggle:hover { filter: brightness(1.2); }
@@ -413,6 +543,12 @@ html, body, #root {
   font-size: 16px;
 }
 
+.empty-state-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 /* Diff viewer */
 
 .diff-viewer {
@@ -440,28 +576,9 @@ html, body, #root {
   gap: 6px;
 }
 .diff-nav button {
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 2px 8px;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 11px;
-}
-.diff-nav button:hover { background: var(--hover-bg); }
-
-.toolbar-button {
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 4px 10px;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.toolbar-button:hover {
-  background: var(--hover-bg);
+  width: 32px;
+  height: 32px;
+  padding: 0;
 }
 
 .diff-editors {
@@ -520,6 +637,7 @@ html, body, #root {
 .merge-toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 6px 12px;
   background: var(--tab-bg);
@@ -583,17 +701,6 @@ html, body, #root {
 .editor-settings-checkbox input {
   margin: 0;
 }
-
-.merge-toolbar button {
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 2px 10px;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 11px;
-}
-.merge-toolbar button:hover { background: var(--hover-bg); }
 
 .merge-error {
   padding: 8px 12px;
@@ -660,7 +767,7 @@ html, body, #root {
   width: min(440px, 100%);
   background: var(--panel-bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 10px;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
   display: flex;
   flex-direction: column;
@@ -699,12 +806,10 @@ html, body, #root {
   color: var(--text-muted);
 }
 
-.dialog-field input {
+.dialog-field input,
+.dialog-field select {
   width: 100%;
-  border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
-  border-radius: 4px;
   padding: 8px 10px;
   font-size: 13px;
 }
@@ -713,4 +818,92 @@ html, body, #root {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.dialog-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dialog-segment {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.dialog-segment-button,
+.dialog-mode-button {
+  padding: 10px 12px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.dialog-segment-button-active,
+.dialog-mode-button-active {
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel-bg));
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
+}
+
+.dialog-mode-list {
+  display: grid;
+  gap: 8px;
+}
+
+.dialog-path-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--tab-bg) 68%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.dialog-path-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+}
+
+.dialog-path-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dialog-helper {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.dialog-helper-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dialog-helper-error {
+  color: var(--danger);
+}
+
+.add-diff-dialog {
+  width: min(560px, 100%);
+}
+
+@media (max-width: 720px) {
+  .sidebar-shell {
+    min-width: 200px;
+  }
+
+  .editor-settings-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dialog-card,
+  .add-diff-dialog {
+    width: 100%;
+  }
 }

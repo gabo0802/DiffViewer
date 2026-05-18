@@ -14,6 +14,7 @@ import {
 } from "../editorPreferences";
 import FormDialog from "./FormDialog";
 import type { FileDiff, MergeBuffer } from "../types";
+import { EditIcon, LoadingIcon, SaveIcon } from "./Icons";
 
 interface Props {
   fileDiff: FileDiff;
@@ -49,6 +50,7 @@ export default function MergePanel({
   const [showEditorSettings, setShowEditorSettings] = useState(false);
   const [saveAsVisible, setSaveAsVisible] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<any>(null);
   const mergeDecorationIdsRef = useRef<string[]>([]);
@@ -107,6 +109,7 @@ export default function MergePanel({
 
   const handleSave = async () => {
     setSaveError(null);
+    setIsSaving(true);
     try {
       await api.setMergebufferText(fileDiff.filediff_id, mergedText);
       await api.saveMergebuffer(fileDiff.filediff_id);
@@ -119,6 +122,8 @@ export default function MergePanel({
       } else {
         setSaveError(`Save failed: ${message}`);
       }
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -130,6 +135,7 @@ export default function MergePanel({
   const submitSaveAs = async (values: Record<string, string>) => {
     const path = values.path.trim();
     if (!path) return;
+    setIsSaving(true);
     try {
       await api.setMergebufferText(fileDiff.filediff_id, mergedText);
       await api.saveMergebufferAs(fileDiff.filediff_id, path);
@@ -138,6 +144,8 @@ export default function MergePanel({
       await onSaveComplete?.();
     } catch (e) {
       setSaveError(`Save As failed: ${String(e)}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -191,10 +199,17 @@ export default function MergePanel({
           type="button"
           onClick={() => setShowEditorSettings((current) => !current)}
         >
-          Editor
+          <EditIcon />
+          <span>Editor</span>
         </button>
-        <button type="button" onClick={handleSave}>Save</button>
-        <button type="button" onClick={handleSaveAs}>Save As</button>
+        <button type="button" onClick={handleSave} disabled={isSaving}>
+          {isSaving ? <LoadingIcon className="button-icon-spin" /> : <SaveIcon />}
+          <span>{isSaving ? "Saving..." : "Save"}</span>
+        </button>
+        <button type="button" onClick={handleSaveAs} disabled={isSaving}>
+          <SaveIcon />
+          <span>Save As</span>
+        </button>
         <button type="button" onClick={onToggle}>Close</button>
       </div>
       {saveError && <div className="merge-error">{saveError}</div>}

@@ -1,4 +1,5 @@
 use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -26,6 +27,25 @@ struct P4DescribeFile {
     depot_path: String,
     rev: Option<u32>,
     action: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct P4PendingChangeSummary {
+    pub change: String,
+    pub description: String,
+    pub client: Option<String>,
+    pub user: Option<String>,
+    pub is_default: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommitSummary {
+    pub rev: String,
+    pub short_rev: String,
+    pub subject: String,
+    pub relative_time: String,
 }
 
 pub fn import_git_working_tree(
@@ -145,6 +165,77 @@ pub fn import_git_commit(
         },
         None,
     )
+}
+
+pub fn list_git_commits(repo_path: &str, limit: usize) -> Result<Vec<GitCommitSummary>, String> {
+    let max_count = limit.max(1).min(100).to_string();
+    let output = run_command(
+        "git",
+        &[
+            "-C",
+            repo_path,
+            "log",
+            "--max-count",
+            &max_count,
+            "--pretty=format:%H%x1f%h%x1f%s%x1f%cr",
+        ],
+        None,
+    )?;
+
+    Ok(output
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.split('\u{1f}');
+            let rev = parts.next()?.trim();
+            let short_rev = parts.next()?.trim();
+            let subject = parts.next()?.trim();
+            let relative_time = parts.next()?.trim();
+            if rev.is_empty() {
+                return None;
+            }
+            Some(GitCommitSummary {
+                rev: rev.to_string(),
+                short_rev: short_rev.to_string(),
+                subject: subject.to_string(),
+                relative_time: relative_time.to_string(),
+            })
+        })
+        .collect())
+}
+
+pub fn list_p4_pending_changes(cwd: Option<&str>) -> Result<Vec<P4PendingChangeSummary>, String> {
+    let p4_config = load_p4_config(cwd);
+    let mut args = vec![
+        "changes".to_string(),
+        "-s".to_string(),
+        "pending".to_string(),
+    ];
+    if let Some(client) = p4_config
+        .client
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        args.push("-c".to_string());
+        args.push(client.to_string());
+    }
+
+    let output = run_p4_owned(&args, cwd, &p4_config)?;
+    let mut changes = vec![P4PendingChangeSummary {
+        change: "default".to_string(),
+        description: "Default pending changelist".to_string(),
+        client: p4_config.client.clone(),
+        user: p4_config.user.clone(),
+        is_default: true,
+    }];
+
+    for raw_line in output.lines() {
+        let Some(summary) = parse_p4_pending_change_line(raw_line) else {
+            continue;
+        };
+        changes.push(summary);
+    }
+
+    Ok(changes)
 }
 
 pub fn import_p4_pending(
@@ -1187,6 +1278,49 @@ fn first_p4_description_line(output: &str) -> Option<String> {
         }
     }
     None
+}
+
+fn parse_p4_pending_change_line(raw_line: &str) -> Option<P4PendingChangeSummary> {
+    let line = raw_line.trim();
+    let change = line
+        .strip_prefix("Change ")?
+        .split_whitespace()
+        .next()?
+        .trim()
+        .to_string();
+
+    let user_client = line
+        .split(" by ")
+        .nth(1)?
+        .split(" on ")
+        .next()
+        .or_else(|| line.split(" by ").nth(1))
+        .unwrap_or_default();
+    let (user, client) = user_client
+        .split_once('@')
+        .map(|(user, client)| {
+            (
+                Some(user.trim().to_string()),
+                Some(client.trim().to_string()),
+            )
+        })
+        .unwrap_or((None, None));
+
+    let description = line
+        .split('\'')
+        .nth(1)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("Pending changelist")
+        .to_string();
+
+    Some(P4PendingChangeSummary {
+        change,
+        description,
+        client,
+        user,
+        is_default: false,
+    })
 }
 
 fn opened_args<'a>(change: &'a str, p4_config: &P4Config) -> Vec<&'a str> {

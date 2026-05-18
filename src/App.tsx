@@ -3,6 +3,7 @@ import * as api from "./api";
 import Sidebar from "./components/Sidebar";
 import DiffViewer from "./components/DiffViewer";
 import MergePanel from "./components/MergePanel";
+import { EditIcon, ThemeIcon } from "./components/Icons";
 import {
   loadEditorPreferences,
   type EditorPreferences,
@@ -133,18 +134,21 @@ export default function App() {
           <div className="toolbar-actions">
             <button
               type="button"
-              className="toolbar-button"
+              className="toolbar-button toolbar-button-with-icon"
               onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             >
-              {theme === "dark" ? "Light Mode" : "Dark Mode"}
+              <ThemeIcon mode={theme} />
+              <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
             </button>
             {currentFd && canEditCurrent && (
               <button
                 type="button"
-                className="btn-merge-toggle"
+                className="btn-merge-toggle button-with-icon"
                 onClick={() => setMergeVisible((v) => !v)}
               >
-                {mergeVisible ? "Hide Merge" : "Edit / Resolve"}
+                <EditIcon />
+                <span>{mergeVisible ? "Hide Merge" : "Edit / Resolve"}</span>
               </button>
             )}
           </div>

@@ -178,6 +178,19 @@ pub fn create_workspace(conn: &Connection, name: &str) -> Result<Workspace, Stri
     })
 }
 
+pub fn update_workspace_settings(
+    conn: &Connection,
+    workspace_id: &str,
+    settings_json: &str,
+) -> Result<(), String> {
+    conn.execute(
+        "UPDATE workspaces SET settings_json = ?2 WHERE workspace_id = ?1",
+        params![workspace_id, settings_json],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 pub fn insert_diffset(conn: &Connection, ds: &DiffSet) -> Result<(), String> {
     conn.execute(
         "INSERT INTO diffsets (diffset_id, workspace_id, title, source_type, provider, kind, source_meta_json, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",

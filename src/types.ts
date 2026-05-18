@@ -8,6 +8,36 @@ export interface Workspace {
   settings_json: string;
 }
 
+export interface SavedWorkspaceLocation {
+  id: string;
+  path: string;
+  label: string;
+  createdAt: number;
+  lastUsedAt: number;
+}
+
+export interface WorkspaceSettings {
+  savedGitDirectories: SavedWorkspaceLocation[];
+  savedP4Directories: SavedWorkspaceLocation[];
+  selectedGitDirectoryId: string | null;
+  selectedP4DirectoryId: string | null;
+}
+
+export interface P4PendingChangeSummary {
+  change: string;
+  description: string;
+  client: string | null;
+  user: string | null;
+  isDefault: boolean;
+}
+
+export interface GitCommitSummary {
+  rev: string;
+  shortRev: string;
+  subject: string;
+  relativeTime: string;
+}
+
 export interface DiffSet {
   diffset_id: string;
   workspace_id: string;

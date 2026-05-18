@@ -78,6 +78,21 @@ pub fn import_p4_submitted(
 }
 
 #[tauri::command]
+pub fn list_git_commits(
+    repo_path: String,
+    limit: Option<usize>,
+) -> Result<Vec<scm::GitCommitSummary>, String> {
+    scm::list_git_commits(&repo_path, limit.unwrap_or(30))
+}
+
+#[tauri::command]
+pub fn list_p4_pending_changes(
+    cwd: Option<String>,
+) -> Result<Vec<scm::P4PendingChangeSummary>, String> {
+    scm::list_p4_pending_changes(cwd.as_deref())
+}
+
+#[tauri::command]
 pub fn list_diffsets(
     state: State<AppState>,
     workspace_id: String,
