@@ -15,6 +15,13 @@ pub struct P4OpenedFile {
     pub local_path: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct P4DescribeFile {
+    depot_path: String,
+    rev: Option<u32>,
+    action: String,
+}
+
 #[derive(Debug, Clone, Default)]
 struct P4Config {
     client: Option<String>,
@@ -220,7 +227,8 @@ pub fn import_p4_shelved(
     let p4_config = load_p4_config(cwd);
     debug.log(format!("import_p4_shelved config={:?}", p4_config));
     let output = run_p4(&["describe", "-S", "-du", change], cwd, &p4_config)?;
-    let actions = parse_p4_describe_actions(&output);
+    let described_files = parse_p4_describe_files(&output);
+    let actions = describe_action_map(&described_files);
     debug.log(format!(
         "import_p4_shelved describe_actions={} output_len={}",
         actions.len(),
@@ -237,7 +245,7 @@ pub fn import_p4_shelved(
         &format!("P4 shelved changelist {}", change),
         "depot previous/have",
         &format!("shelf @={}", change),
-        &actions,
+        &described_files,
     )
 }
 
@@ -255,7 +263,8 @@ pub fn import_p4_submitted(
     let p4_config = load_p4_config(cwd);
     debug.log(format!("import_p4_submitted config={:?}", p4_config));
     let output = run_p4(&["describe", "-du", change], cwd, &p4_config)?;
-    let actions = parse_p4_describe_actions(&output);
+    let described_files = parse_p4_describe_files(&output);
+    let actions = describe_action_map(&described_files);
     debug.log(format!(
         "import_p4_submitted describe_actions={} output_len={}",
         actions.len(),
@@ -272,7 +281,7 @@ pub fn import_p4_submitted(
         &format!("P4 submitted changelist {}", change),
         "#rev-1",
         &format!("#rev @{}", change),
-        &actions,
+        &described_files,
     )
 }
 
@@ -287,17 +296,23 @@ fn import_p4_describe(
     fallback_title: &str,
     left_label: &str,
     right_label: &str,
-    actions: &HashMap<String, String>,
+    described_files: &[P4DescribeFile],
 ) -> Result<String, String> {
     let desc = first_p4_description_line(output);
     let p4_config = load_p4_config(cwd);
     let title = desc
         .map(|line| format!("{}: {}", fallback_title, line))
         .unwrap_or_else(|| fallback_title.to_string());
-    import_unified_diff_text(
+    let parsed = normalize_p4_describe_files(
+        unified_parser::parse_unified_diff(output),
+        described_files,
+        kind,
+        change,
+    );
+    import_parsed_diff_text(
         conn,
         workspace_id,
-        output,
+        &parsed,
         DiffSetDescriptor {
             title,
             source_type: "Perforce".to_string(),
@@ -306,7 +321,7 @@ fn import_p4_describe(
             source_meta: serde_json::json!({
                 "change": change,
                 "status": status,
-                "file_count": actions.len().max(unified_parser::parse_unified_diff(output).len()),
+                "file_count": described_files.len().max(parsed.len()),
                 "cwd": cwd
             }),
             left_label: left_label.to_string(),
@@ -316,7 +331,7 @@ fn import_p4_describe(
                 config: p4_config,
             },
         },
-        Some(actions),
+        Some(&describe_action_map(described_files)),
     )
 }
 
@@ -467,6 +482,16 @@ fn import_unified_diff_text(
         parsed.len(),
         diff_text.len()
     ));
+    import_parsed_diff_text(conn, workspace_id, &parsed, descriptor, action_by_path)
+}
+
+fn import_parsed_diff_text(
+    conn: &Connection,
+    workspace_id: &str,
+    parsed: &[PatchFileDiff],
+    descriptor: DiffSetDescriptor,
+    action_by_path: Option<&HashMap<String, String>>,
+) -> Result<String, String> {
     let now = chrono::Utc::now().timestamp();
     let diffset_id = uuid::Uuid::new_v4().to_string();
 
@@ -484,7 +509,7 @@ fn import_unified_diff_text(
         },
     )?;
 
-    for pf in &parsed {
+    for pf in parsed {
         insert_patch_file_diff(
             conn,
             &diffset_id,
@@ -896,7 +921,11 @@ pub fn parse_p4_opened(output: &str) -> Vec<P4OpenedFile> {
 }
 
 pub fn parse_p4_describe_actions(output: &str) -> HashMap<String, String> {
-    let mut actions = HashMap::new();
+    describe_action_map(&parse_p4_describe_files(output))
+}
+
+fn parse_p4_describe_files(output: &str) -> Vec<P4DescribeFile> {
+    let mut files = Vec::new();
     for line in output.lines() {
         let trimmed = line.trim();
         let Some(rest) = trimmed.strip_prefix("... ") else {
@@ -909,9 +938,144 @@ pub fn parse_p4_describe_actions(output: &str) -> HashMap<String, String> {
         let Some(action) = parts.next() else {
             continue;
         };
-        actions.insert(strip_p4_rev(path_with_rev), action.to_string());
+        let (depot_path, rev) = split_p4_path_rev(path_with_rev);
+        files.push(P4DescribeFile {
+            depot_path,
+            rev,
+            action: action.to_string(),
+        });
     }
-    actions
+    files
+}
+
+fn describe_action_map(files: &[P4DescribeFile]) -> HashMap<String, String> {
+    files.iter()
+        .map(|file| (file.depot_path.clone(), file.action.clone()))
+        .collect()
+}
+
+fn split_p4_path_rev(path: &str) -> (String, Option<u32>) {
+    if let Some((before, after)) = path.rsplit_once('#') {
+        if let Ok(rev) = after.parse::<u32>() {
+            return (before.to_string(), Some(rev));
+        }
+    }
+    (path.to_string(), None)
+}
+
+fn normalize_p4_describe_files(
+    parsed: Vec<PatchFileDiff>,
+    described_files: &[P4DescribeFile],
+    kind: &str,
+    change: &str,
+) -> Vec<PatchFileDiff> {
+    let metadata_by_path = described_files
+        .iter()
+        .map(|file| (file.depot_path.clone(), file.clone()))
+        .collect::<HashMap<_, _>>();
+    let mut normalized = Vec::new();
+    let mut seen = HashSet::new();
+
+    for mut pf in parsed {
+        let display_path = describe_display_path(&pf);
+        if let Some(file) = metadata_by_path.get(&display_path) {
+            apply_describe_revision_info(&mut pf, file, kind, change);
+            pf.status = describe_status(&file.action).to_string();
+            seen.insert(file.depot_path.clone());
+        }
+        normalized.push(pf);
+    }
+
+    for file in described_files {
+        if seen.contains(&file.depot_path) {
+            continue;
+        }
+        normalized.push(synthetic_describe_patch_file(file, kind, change));
+    }
+
+    normalized
+}
+
+fn synthetic_describe_patch_file(file: &P4DescribeFile, kind: &str, change: &str) -> PatchFileDiff {
+    let (old_path, new_path) = describe_content_paths(file, kind, change);
+    PatchFileDiff {
+        old_path,
+        new_path,
+        hunks: Vec::new(),
+        status: describe_status(&file.action).to_string(),
+    }
+}
+
+fn apply_describe_revision_info(
+    pf: &mut PatchFileDiff,
+    file: &P4DescribeFile,
+    kind: &str,
+    change: &str,
+) {
+    let (old_path, new_path) = describe_content_paths(file, kind, change);
+    pf.old_path = old_path;
+    pf.new_path = new_path;
+}
+
+fn describe_content_paths(file: &P4DescribeFile, kind: &str, change: &str) -> (String, String) {
+    match kind {
+        "p4Shelved" => match file.action.as_str() {
+            "add" | "branch" | "move/add" => (
+                "/dev/null".to_string(),
+                format!("{}@={}", file.depot_path, change),
+            ),
+            "delete" | "move/delete" => (
+                file_with_rev(file).unwrap_or_else(|| file.depot_path.clone()),
+                "/dev/null".to_string(),
+            ),
+            _ => (
+                file_with_rev(file).unwrap_or_else(|| file.depot_path.clone()),
+                format!("{}@={}", file.depot_path, change),
+            ),
+        },
+        _ => match file.action.as_str() {
+            "add" | "branch" | "move/add" => (
+                "/dev/null".to_string(),
+                file_with_rev(file).unwrap_or_else(|| file.depot_path.clone()),
+            ),
+            "delete" | "move/delete" => (
+                previous_rev_path(file).unwrap_or_else(|| file.depot_path.clone()),
+                "/dev/null".to_string(),
+            ),
+            _ => (
+                previous_rev_path(file).unwrap_or_else(|| file.depot_path.clone()),
+                file_with_rev(file).unwrap_or_else(|| file.depot_path.clone()),
+            ),
+        },
+    }
+}
+
+fn file_with_rev(file: &P4DescribeFile) -> Option<String> {
+    file.rev.map(|rev| format!("{}#{}", file.depot_path, rev))
+}
+
+fn previous_rev_path(file: &P4DescribeFile) -> Option<String> {
+    file.rev
+        .and_then(|rev| rev.checked_sub(1))
+        .map(|rev| format!("{}#{}", file.depot_path, rev))
+}
+
+fn describe_status(action: &str) -> &str {
+    match action {
+        "add" | "branch" | "move/add" => "added",
+        "delete" | "move/delete" => "deleted",
+        _ => "modified",
+    }
+}
+
+fn describe_display_path(pf: &PatchFileDiff) -> String {
+    if pf.old_path.starts_with("//") {
+        strip_p4_rev(&pf.old_path)
+    } else if pf.new_path.starts_with("//") {
+        strip_p4_rev(&pf.new_path)
+    } else {
+        display_path_for_patch(pf)
+    }
 }
 
 fn first_p4_description_line(output: &str) -> Option<String> {
@@ -1180,6 +1344,57 @@ mod tests {
         );
         assert_eq!(actions.get("//depot/main/a.cpp"), Some(&"edit".to_string()));
         assert_eq!(actions.get("//depot/main/b.cpp"), Some(&"add".to_string()));
+    }
+
+    #[test]
+    fn parses_p4_describe_file_metadata() {
+        let files = parse_p4_describe_files(
+            "Affected files ...\n\n... //depot/main/a.cpp#4 edit\n... //depot/main/b.cpp#1 add\n",
+        );
+        assert_eq!(
+            files,
+            vec![
+                P4DescribeFile {
+                    depot_path: "//depot/main/a.cpp".to_string(),
+                    rev: Some(4),
+                    action: "edit".to_string(),
+                },
+                P4DescribeFile {
+                    depot_path: "//depot/main/b.cpp".to_string(),
+                    rev: Some(1),
+                    action: "add".to_string(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn normalizes_submitted_describe_paths_and_adds_missing_files() {
+        let parsed = vec![PatchFileDiff {
+            old_path: "//depot/main/a.cpp#4".to_string(),
+            new_path: "//depot/main/a.cpp#4".to_string(),
+            hunks: Vec::new(),
+            status: "modified".to_string(),
+        }];
+        let described = vec![
+            P4DescribeFile {
+                depot_path: "//depot/main/a.cpp".to_string(),
+                rev: Some(4),
+                action: "edit".to_string(),
+            },
+            P4DescribeFile {
+                depot_path: "//depot/main/b.cpp".to_string(),
+                rev: Some(1),
+                action: "add".to_string(),
+            },
+        ];
+
+        let normalized = normalize_p4_describe_files(parsed, &described, "p4Submitted", "12345");
+        assert_eq!(normalized.len(), 2);
+        assert_eq!(normalized[0].old_path, "//depot/main/a.cpp#3");
+        assert_eq!(normalized[0].new_path, "//depot/main/a.cpp#4");
+        assert_eq!(normalized[1].old_path, "/dev/null");
+        assert_eq!(normalized[1].new_path, "//depot/main/b.cpp#1");
     }
 
     #[test]
