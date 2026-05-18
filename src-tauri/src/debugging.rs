@@ -6,7 +6,7 @@ use crate::io;
 static DEBUG_ENABLED: AtomicBool = AtomicBool::new(false);
 
 pub fn configure_from_args(args: &[String]) {
-    let enabled = args.iter().any(|arg| arg == "--debug");
+    let enabled = debug_enabled_from(args, |key| std::env::var(key).ok());
     DEBUG_ENABLED.store(enabled, Ordering::Relaxed);
 }
 
@@ -111,6 +111,23 @@ fn count_lines(text: &str) -> usize {
     text.split('\n').count()
 }
 
+fn debug_enabled_from<F>(args: &[String], env_lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<String>,
+{
+    args.iter().any(|arg| arg == "--debug") || env_flag_enabled(&env_lookup, "npm_config_debug")
+}
+
+fn env_flag_enabled<F>(env_lookup: F, key: &str) -> bool
+where
+    F: Fn(&str) -> Option<String>,
+{
+    env_lookup(key)
+        .map(|value| value.trim().to_ascii_lowercase())
+        .map(|value| !value.is_empty() && value != "0" && value != "false" && value != "no")
+        .unwrap_or(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,5 +140,35 @@ mod tests {
     #[test]
     fn counts_trailing_newline_as_extra_line() {
         assert_eq!(count_lines("one\ntwo\n"), 3);
+    }
+
+    #[test]
+    fn enables_debug_from_args() {
+        let args = vec!["diffviewer.exe".to_string(), "--debug".to_string()];
+        assert!(debug_enabled_from(&args, |_| None));
+    }
+
+    #[test]
+    fn enables_debug_from_npm_config_env() {
+        let args = vec!["diffviewer.exe".to_string()];
+        assert!(debug_enabled_from(&args, |key| {
+            if key == "npm_config_debug" {
+                Some("true".to_string())
+            } else {
+                None
+            }
+        }));
+    }
+
+    #[test]
+    fn ignores_falsey_npm_config_env() {
+        let args = vec!["diffviewer.exe".to_string()];
+        assert!(!debug_enabled_from(&args, |key| {
+            if key == "npm_config_debug" {
+                Some("false".to_string())
+            } else {
+                None
+            }
+        }));
     }
 }
