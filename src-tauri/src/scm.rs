@@ -1108,7 +1108,11 @@ fn strip_p4_rev(path: &str) -> String {
 }
 
 fn display_path_for_patch(pf: &PatchFileDiff) -> String {
-    if pf.new_path == "/dev/null" {
+    if pf.old_path.starts_with("//") {
+        strip_p4_rev(&pf.old_path)
+    } else if pf.new_path.starts_with("//") {
+        strip_p4_rev(&pf.new_path)
+    } else if pf.new_path == "/dev/null" {
         strip_p4_rev(&pf.old_path)
     } else {
         strip_p4_rev(&pf.new_path)
@@ -1176,5 +1180,16 @@ mod tests {
         );
         assert_eq!(actions.get("//depot/main/a.cpp"), Some(&"edit".to_string()));
         assert_eq!(actions.get("//depot/main/b.cpp"), Some(&"add".to_string()));
+    }
+
+    #[test]
+    fn prefers_depot_display_path_for_pending_p4_diffs() {
+        let pf = PatchFileDiff {
+            old_path: "//depot/main/a.cpp".to_string(),
+            new_path: "C:\\work\\a.cpp".to_string(),
+            hunks: Vec::new(),
+            status: "renamed".to_string(),
+        };
+        assert_eq!(display_path_for_patch(&pf), "//depot/main/a.cpp");
     }
 }
