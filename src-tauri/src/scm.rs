@@ -905,6 +905,36 @@ fn git_show_file(repo_path: &str, rel_path: &str) -> Result<String, String> {
     )
 }
 
+pub fn track_generated_p4_backup(backup_path: &Path, cwd: Option<&str>) -> Result<(), String> {
+    let backup = backup_path.to_string_lossy().into_owned();
+    let working_cwd = cwd
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string)
+        .or_else(|| backup_path.parent().map(|parent| parent.to_string_lossy().into_owned()));
+    let p4_config = load_p4_config(working_cwd.as_deref());
+    let debug = DebugLogger::new("scm");
+    debug.log(format!(
+        "track_generated_p4_backup path={} cwd={:?} config={:?}",
+        backup, working_cwd, p4_config
+    ));
+
+    match run_p4_owned(
+        &["add".to_string(), backup.clone()],
+        working_cwd.as_deref(),
+        &p4_config,
+    ) {
+        Ok(_) => Ok(()),
+        Err(err)
+            if err.contains("already opened for add")
+                || err.contains("currently opened for add")
+                || err.contains("can't add existing file") =>
+        {
+            Ok(())
+        }
+        Err(err) => Err(err),
+    }
+}
+
 fn p4_print_file(path: &str, cwd: Option<&str>, p4_config: &P4Config) -> Result<String, String> {
     run_p4_owned(
         &["print".to_string(), "-q".to_string(), path.to_string()],

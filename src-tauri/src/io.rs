@@ -60,22 +60,24 @@ pub fn read_snapshot(cache_path: &str) -> Result<String, String> {
     read_file_text(Path::new(cache_path))
 }
 
-/// Atomic write with backup.
-pub fn atomic_write(target: &Path, content: &[u8]) -> Result<(), String> {
+/// Atomic write with backup. Returns the backup path when one was created.
+pub fn atomic_write(target: &Path, content: &[u8]) -> Result<Option<PathBuf>, String> {
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("Create directory failed: {}", e))?;
     }
+    let mut backup_path = None;
     // Backup existing file
     if target.exists() {
         let backup = target.with_extension("diffedit.bak");
         fs::copy(target, &backup).map_err(|e| format!("Backup failed: {}", e))?;
+        backup_path = Some(backup);
     }
     // Write to temp file next to target
     let tmp = target.with_extension("diffedit.tmp");
     fs::write(&tmp, content).map_err(|e| format!("Write temp failed: {}", e))?;
     // Rename to target
     fs::rename(&tmp, target).map_err(|e| format!("Rename failed: {}", e))?;
-    Ok(())
+    Ok(backup_path)
 }
 
 /// Detect line ending style from existing file content.
