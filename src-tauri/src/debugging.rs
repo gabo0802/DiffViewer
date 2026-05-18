@@ -6,7 +6,7 @@ use crate::io;
 static DEBUG_ENABLED: AtomicBool = AtomicBool::new(false);
 
 pub fn configure_from_args(args: &[String]) {
-    let enabled = debug_enabled_from(args, |key| std::env::var(key).ok());
+    let enabled = args.iter().any(|arg| arg == "--debug");
     DEBUG_ENABLED.store(enabled, Ordering::Relaxed);
 }
 
