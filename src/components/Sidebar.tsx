@@ -56,7 +56,7 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
 
   useEffect(() => {
     if (!workspace || refreshToken === 0) return;
-    loadDiffsets(workspace, true)
+    loadDiffsets(workspace)
       .then(async () => {
         if (!expanded) return;
         const fds = await api.listFilediffs(expanded);
