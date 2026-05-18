@@ -14,7 +14,10 @@ Use the existing repo patterns rather than inventing new ones.
 3. Verify with:
    - `cargo test` in `src-tauri`
    - `npm.cmd run build` in the repo root
-4. When a feature-sized change is complete, create a focused git commit.
+4. If you run a formatter or lint-like repo-wide command such as `cargo fmt`, say so explicitly in updates and in the final summary.
+5. Prefer formatting only touched Rust files when practical, because `cargo fmt` can rewrite unrelated files in the worktree.
+6. If formatting changes spill into unrelated files, do not stage or commit them silently; call them out explicitly.
+7. When a feature-sized change is complete, create a focused git commit.
 
 ## Runtime Rules
 
@@ -48,8 +51,10 @@ Use the existing repo patterns rather than inventing new ones.
 
 ## P4 Debugging
 
+- Base Debugging lives in `src-tauri/src/debugging.rs`.
+  - Enable it by passing `--debug` when running the app.
 - Perforce logging lives in `src-tauri/src/scm.rs`.
-- Look for `[p4-debug]` lines in the Tauri dev console.
+- Look for `[diffviewer-debug][scm]` and `[diffviewer-debug][merge]` lines in the Tauri dev console when debugging backend diff state.
 - When debugging P4 failures, inspect:
   - chosen `config_path`
   - `client`
