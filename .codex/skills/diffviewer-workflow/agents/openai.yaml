@@ -1,0 +1,4 @@
+interface:
+  display_name: "DiffViewer Workflow"
+  short_description: "Repo-local workflow for this diff viewer app"
+  default_prompt: "Use $diffviewer-workflow to work on the DiffViewer repo with its Tauri, Git, and Perforce patterns."
