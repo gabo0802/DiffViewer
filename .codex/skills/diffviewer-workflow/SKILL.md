@@ -13,6 +13,7 @@ Use the existing repo patterns rather than inventing new ones.
 2. Keep edits scoped to the feature or bug at hand.
 3. Verify with:
    - `cargo test` in `src-tauri`
+   - `npm.cmd run typecheck` in the repo root
    - `npm.cmd run build` in the repo root
 4. If you run a formatter or lint-like repo-wide command such as `cargo fmt`, say so explicitly in updates and in the final summary.
 5. Prefer formatting only touched Rust files when practical, because `cargo fmt` can rewrite unrelated files in the worktree.
@@ -69,15 +70,26 @@ Use the existing repo patterns rather than inventing new ones.
 
 - Main coordination files:
   - `src/App.tsx`
+  - `src/hooks/*`
+  - `src/diffDomain.ts`
   - `src/components/Sidebar.tsx`
   - `src/components/DiffViewer.tsx`
   - `src/components/MergePanel.tsx`
   - `src/styles/global.css`
 - Backend SCM/diff logic:
+  - `src-tauri/src/commands/*`
+  - `src-tauri/src/services/*`
+  - `src-tauri/src/content_source.rs`
   - `src-tauri/src/scm.rs`
+  - `src-tauri/src/scm/*`
   - `src-tauri/src/diff_engine/*`
   - `src-tauri/src/main.rs`
-- Reuse the in-app dialog pattern instead of raw `window.prompt` for structured input.
+- Keep `src-tauri/src/main.rs` as wiring: app state setup, startup open request handling, and command registration.
+- Keep Tauri commands thin. Put reusable behavior in `src-tauri/src/services/*`.
+- Use typed content/write-target helpers from `src-tauri/src/content_source.rs` instead of ad hoc `serde_json::Value` parsing.
+- Reuse frontend domain helpers from `src/diffDomain.ts` instead of scattered `JSON.parse` for backend JSON fields.
+- Reuse hooks in `src/hooks/*` for app state concerns such as tabs, persisted state, resizing, and diff/merge scroll sync.
+- Reuse the in-app dialog pattern instead of raw `window.prompt` or `alert` for structured input and user-facing errors.
 - Keep diff and merge behavior aligned with desktop diff-tool expectations:
   - synchronized scrolling
   - clear add/delete highlighting
@@ -100,6 +112,7 @@ Use the existing repo patterns rather than inventing new ones.
 
 - Prefer backend fixes over frontend workarounds when import/render data is wrong.
 - Prefer reusable UI components over one-off prompts and alerts when a flow is likely to recur.
+- Use SQLite transactions for multi-step diffset/filediff persistence.
 - Preserve the existing provider-aware model:
   - Git
   - P4
