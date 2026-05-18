@@ -768,18 +768,24 @@ fn add_opened_files_without_diffs(
         if existing.contains(&path) {
             continue;
         }
+        let (status, content_left_json, content_right_json) =
+            pending_no_diff_filediff_payload(file);
+        DebugLogger::new("scm").log_diff_line_counts(
+            &path,
+            &content_left_json,
+            &content_right_json,
+        );
         store::insert_filediff(
             conn,
             &FileDiff {
                 filediff_id: uuid::Uuid::new_v4().to_string(),
                 diffset_id: diffset_id.to_string(),
                 display_path: path,
-                status: format!("{} no-diff", file.action),
+                status,
                 left_label: "have revision".to_string(),
                 right_label: "workspace".to_string(),
-                content_left_json: serde_json::json!({ "type": "virtual", "text": "" }).to_string(),
-                content_right_json: serde_json::json!({ "type": "virtual", "text": "" })
-                    .to_string(),
+                content_left_json,
+                content_right_json,
                 hunks_json: "[]".to_string(),
                 write_target_json: file
                     .local_path
@@ -794,6 +800,24 @@ fn add_opened_files_without_diffs(
     }
 
     Ok(())
+}
+
+fn pending_no_diff_filediff_payload(file: &P4OpenedFile) -> (String, String, String) {
+    let empty_json = serde_json::json!({ "type": "virtual", "text": "" }).to_string();
+    let right_json = file
+        .local_path
+        .as_ref()
+        .map(|path| serde_json::json!({ "type": "path", "path": path }).to_string())
+        .unwrap_or_else(|| empty_json.clone());
+
+    match file.action.as_str() {
+        "add" | "branch" | "move/add" => ("added".to_string(), empty_json, right_json),
+        _ => (
+            format!("{} no-diff", file.action),
+            empty_json,
+            serde_json::json!({ "type": "virtual", "text": "" }).to_string(),
+        ),
+    }
 }
 
 fn populate_p4_local_paths(
@@ -1395,6 +1419,26 @@ mod tests {
         assert_eq!(normalized[0].new_path, "//depot/main/a.cpp#4");
         assert_eq!(normalized[1].old_path, "/dev/null");
         assert_eq!(normalized[1].new_path, "//depot/main/b.cpp#1");
+    }
+
+    #[test]
+    fn pending_added_file_without_unified_diff_uses_workspace_content() {
+        let file = P4OpenedFile {
+            depot_path: "//depot/main/new_file.cpp".to_string(),
+            action: "add".to_string(),
+            change: "default".to_string(),
+            local_path: Some("C:\\work\\new_file.cpp".to_string()),
+        };
+        let (status, left_json, right_json) = pending_no_diff_filediff_payload(&file);
+        assert_eq!(status, "added");
+        assert_eq!(
+            left_json,
+            serde_json::json!({ "type": "virtual", "text": "" }).to_string()
+        );
+        assert_eq!(
+            right_json,
+            serde_json::json!({ "type": "path", "path": "C:\\work\\new_file.cpp" }).to_string()
+        );
     }
 
     #[test]
