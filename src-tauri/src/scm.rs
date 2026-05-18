@@ -141,7 +141,10 @@ pub fn import_git_commit(
             }),
             left_label: format!("{}^", short_rev(rev)),
             right_label: short_rev(rev),
-            write_target_mode: WriteTargetMode::SaveAsRequired,
+            write_target_mode: WriteTargetMode::GitCommit {
+                repo_path: repo_path.to_string(),
+                rev: rev.to_string(),
+            },
         },
         None,
     )
@@ -453,9 +456,12 @@ struct DiffSetDescriptor {
 
 #[derive(Clone)]
 enum WriteTargetMode {
-    SaveAsRequired,
     GitWorkingTree {
         repo_path: String,
+    },
+    GitCommit {
+        repo_path: String,
+        rev: String,
     },
     P4Pending {
         cwd: Option<String>,
@@ -636,10 +642,6 @@ fn derive_content_sources(
     display_path: &str,
 ) -> Result<(String, String), String> {
     match mode {
-        WriteTargetMode::SaveAsRequired => Ok((
-            serde_json::json!({ "type": "virtual", "text": reconstruct_old_text(pf) }).to_string(),
-            serde_json::json!({ "type": "virtual", "text": reconstruct_new_text(pf) }).to_string(),
-        )),
         WriteTargetMode::GitWorkingTree { repo_path } => {
             let old_rel = if pf.old_path != "/dev/null" {
                 pf.old_path.as_str()
@@ -662,6 +664,32 @@ fn derive_content_sources(
             Ok((
                 serde_json::json!({ "type": "virtual", "text": left_text }).to_string(),
                 right_json,
+            ))
+        }
+        WriteTargetMode::GitCommit { repo_path, rev } => {
+            let old_rel = if pf.old_path != "/dev/null" {
+                pf.old_path.as_str()
+            } else {
+                display_path
+            };
+            let new_rel = if pf.new_path != "/dev/null" {
+                pf.new_path.as_str()
+            } else {
+                display_path
+            };
+            let left_text = if pf.old_path == "/dev/null" {
+                String::new()
+            } else {
+                git_show_file_at_rev(repo_path, &format!("{}^", rev), old_rel)?
+            };
+            let right_text = if pf.new_path == "/dev/null" {
+                String::new()
+            } else {
+                git_show_file_at_rev(repo_path, rev, new_rel)?
+            };
+            Ok((
+                serde_json::json!({ "type": "virtual", "text": left_text }).to_string(),
+                serde_json::json!({ "type": "virtual", "text": right_text }).to_string(),
             ))
         }
         WriteTargetMode::P4Pending { cwd, config } => {
@@ -715,11 +743,11 @@ fn derive_write_target(
     display_path: &str,
 ) -> serde_json::Value {
     match mode {
-        WriteTargetMode::SaveAsRequired => serde_json::json!({ "type": "save_as_required" }),
         WriteTargetMode::GitWorkingTree { repo_path } => {
             let resolved = Path::new(repo_path).join(display_path);
             serde_json::json!({ "type": "path", "path": resolved.to_string_lossy() })
         }
+        WriteTargetMode::GitCommit { .. } => serde_json::json!({ "type": "save_as_required" }),
         WriteTargetMode::P4Pending { cwd, .. } => {
             if let Some(local_path) = pending_local_path(pf, cwd.as_deref()) {
                 serde_json::json!({ "type": "path", "path": local_path })
@@ -898,9 +926,13 @@ fn collect_pending_p4_diff(
 }
 
 fn git_show_file(repo_path: &str, rel_path: &str) -> Result<String, String> {
+    git_show_file_at_rev(repo_path, "HEAD", rel_path)
+}
+
+fn git_show_file_at_rev(repo_path: &str, rev: &str, rel_path: &str) -> Result<String, String> {
     run_command(
         "git",
-        &["-C", repo_path, "show", &format!("HEAD:{}", rel_path)],
+        &["-C", repo_path, "show", &format!("{}:{}", rev, rel_path)],
         None,
     )
 }
