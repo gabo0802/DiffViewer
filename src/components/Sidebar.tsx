@@ -29,7 +29,7 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
   const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingImportKind, setPendingImportKind] = useState<
-    "p4Pending" | "p4Shelved" | "p4Submitted" | null
+    "gitCommit" | "p4Pending" | "p4Shelved" | "p4Submitted" | null
   >(null);
 
   const loadDiffsets = useCallback(async (ws: Workspace, refreshLive = false) => {
@@ -92,7 +92,12 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
 
   const runImport = async (kind: "gitWorking" | "gitCommit" | "p4Pending" | "p4Shelved" | "p4Submitted") => {
     setError(null);
-    if (kind === "p4Pending" || kind === "p4Shelved" || kind === "p4Submitted") {
+    if (
+      kind === "gitCommit" ||
+      kind === "p4Pending" ||
+      kind === "p4Shelved" ||
+      kind === "p4Submitted"
+    ) {
       setPendingImportKind(kind);
       return;
     }
@@ -103,12 +108,6 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
         const repoPath = window.prompt("Git repository path:", ".");
         if (!repoPath) return;
         diffsetId = await api.importGitWorkingTree(repoPath);
-      } else if (kind === "gitCommit") {
-        const repoPath = window.prompt("Git repository path:", ".");
-        if (!repoPath) return;
-        const rev = window.prompt("Git commit or revision:", "HEAD");
-        if (!rev) return;
-        diffsetId = await api.importGitCommit(repoPath, rev);
       }
       if (workspace) await loadDiffsets(workspace);
       if (diffsetId) {
@@ -128,15 +127,21 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
     setError(null);
     try {
       setIsImporting(true);
-      const change = values.change.trim();
-      const cwd = values.cwd.trim() || undefined;
       let diffsetId: string | null = null;
-      if (pendingImportKind === "p4Pending") {
-        diffsetId = await api.importP4Pending(change, cwd);
-      } else if (pendingImportKind === "p4Shelved") {
-        diffsetId = await api.importP4Shelved(change, cwd);
+      if (pendingImportKind === "gitCommit") {
+        const repoPath = values.repoPath.trim();
+        const rev = values.rev.trim();
+        diffsetId = await api.importGitCommit(repoPath, rev);
       } else {
-        diffsetId = await api.importP4Submitted(change, cwd);
+        const change = values.change.trim();
+        const cwd = values.cwd.trim() || undefined;
+        if (pendingImportKind === "p4Pending") {
+          diffsetId = await api.importP4Pending(change, cwd);
+        } else if (pendingImportKind === "p4Shelved") {
+          diffsetId = await api.importP4Shelved(change, cwd);
+        } else {
+          diffsetId = await api.importP4Submitted(change, cwd);
+        }
       }
       if (workspace) await loadDiffsets(workspace);
       if (diffsetId) {
@@ -235,24 +240,55 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
       <FormDialog
         visible={pendingImportKind !== null}
         title={dialogTitle(pendingImportKind)}
-        description="Enter the changelist number and optional workspace path."
+        description={dialogDescription(pendingImportKind)}
         confirmLabel="Open"
         onCancel={() => setPendingImportKind(null)}
         onConfirm={submitP4Import}
-        fields={p4DialogFields(pendingImportKind)}
+        fields={dialogFields(pendingImportKind)}
       />
     </aside>
   );
 }
 
-function dialogTitle(kind: "p4Pending" | "p4Shelved" | "p4Submitted" | null) {
+function dialogTitle(
+  kind: "gitCommit" | "p4Pending" | "p4Shelved" | "p4Submitted" | null
+) {
+  if (kind === "gitCommit") return "Open Git Commit";
   if (kind === "p4Pending") return "Open P4 Pending Changelist";
   if (kind === "p4Shelved") return "Open P4 Shelved Changelist";
   if (kind === "p4Submitted") return "Open P4 Submitted Changelist";
   return "";
 }
 
-function p4DialogFields(kind: "p4Pending" | "p4Shelved" | "p4Submitted" | null): FormDialogField[] {
+function dialogDescription(
+  kind: "gitCommit" | "p4Pending" | "p4Shelved" | "p4Submitted" | null
+) {
+  if (kind === "gitCommit") return "Enter the Git repository path and revision to open.";
+  return "Enter the changelist number and optional workspace path.";
+}
+
+function dialogFields(
+  kind: "gitCommit" | "p4Pending" | "p4Shelved" | "p4Submitted" | null
+): FormDialogField[] {
+  if (kind === "gitCommit") {
+    return [
+      {
+        id: "repoPath",
+        label: "Repository",
+        defaultValue: ".",
+        placeholder: "Path to the Git repository",
+        required: true,
+      },
+      {
+        id: "rev",
+        label: "Revision",
+        defaultValue: "HEAD",
+        placeholder: "Commit SHA, branch, or revision",
+        required: true,
+      },
+    ];
+  }
+
   return [
     {
       id: "change",
