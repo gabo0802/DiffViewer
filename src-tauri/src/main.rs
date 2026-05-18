@@ -339,14 +339,19 @@ fn save_mergebuffer(state: State<AppState>, filediff_id: String) -> Result<Strin
             let debug = DebugLogger::new("merge");
             debug.log_merge_line_count(&fd.display_path, &merged_text, "save");
             debug.log(format!("save_target path={}", target_path));
+            let diffset = store::get_diffset(&conn, &fd.diffset_id)?;
 
             // Preserve EOL style
-            if let Ok(existing) = io::read_file_text(std::path::Path::new(target_path)) {
+            let backup_path = if let Ok(existing) = io::read_file_text(std::path::Path::new(target_path)) {
                 let eol = io::detect_eol(&existing);
                 let normalized = merged_text.replace("\r\n", "\n").replace('\n', eol);
-                io::atomic_write(std::path::Path::new(target_path), normalized.as_bytes())?;
+                io::atomic_write(std::path::Path::new(target_path), normalized.as_bytes())?
             } else {
-                io::atomic_write(std::path::Path::new(target_path), merged_text.as_bytes())?;
+                io::atomic_write(std::path::Path::new(target_path), merged_text.as_bytes())?
+            };
+
+            if let Some(backup_path) = backup_path {
+                maybe_track_pending_p4_backup(&diffset, &backup_path);
             }
 
             // Mark as not dirty
@@ -384,7 +389,12 @@ fn save_mergebuffer_as(
     let debug = DebugLogger::new("merge");
     debug.log_merge_line_count(&fd.display_path, &merged_text, "save_as");
     debug.log(format!("save_as_target path={}", resolved_path));
-    io::atomic_write(std::path::Path::new(&resolved_path), merged_text.as_bytes())?;
+    let diffset = store::get_diffset(&conn, &fd.diffset_id)?;
+    let backup_path = io::atomic_write(std::path::Path::new(&resolved_path), merged_text.as_bytes())?;
+
+    if let Some(backup_path) = backup_path {
+        maybe_track_pending_p4_backup(&diffset, &backup_path);
+    }
 
     // Reattach write target to the chosen path
     let now = chrono::Utc::now().timestamp();
@@ -499,6 +509,34 @@ fn resolve_save_as_target(write_target_json: &str, requested_path: &str) -> Resu
 
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     Ok(cwd.join(requested).to_string_lossy().into_owned())
+}
+
+fn maybe_track_pending_p4_backup(diffset: &store::DiffSet, backup_path: &std::path::Path) {
+    if diffset.kind != "p4Pending" && diffset.kind != "p4PendingDefault" {
+        return;
+    }
+
+    let cwd = parse_diffset_cwd(&diffset.source_meta_json);
+    let debug = DebugLogger::new("merge");
+    debug.log(format!(
+        "tracking_pending_p4_backup path={} cwd={:?}",
+        backup_path.display(),
+        cwd
+    ));
+
+    if let Err(err) = scm::track_generated_p4_backup(backup_path, cwd.as_deref()) {
+        debug.log(format!(
+            "tracking_pending_p4_backup_failed path={} error={}",
+            backup_path.display(),
+            err
+        ));
+    }
+}
+
+fn parse_diffset_cwd(source_meta_json: &str) -> Option<String> {
+    serde_json::from_str::<serde_json::Value>(source_meta_json)
+        .ok()
+        .and_then(|meta| meta.get("cwd").and_then(|value| value.as_str()).map(str::to_string))
 }
 
 fn main() {
