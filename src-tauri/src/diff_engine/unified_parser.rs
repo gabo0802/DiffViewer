@@ -54,7 +54,7 @@ pub fn parse_unified_diff(patch: &str) -> Vec<PatchFileDiff> {
             if let Some(f) = current_file.take() {
                 files.push(f);
             }
-            let old_path = line[4..].trim().to_string();
+            let old_path = parse_diff_header_path(&line[4..]);
             let old_path = strip_prefix_ab(&old_path);
             current_file = Some(PatchFileDiff {
                 old_path,
@@ -65,7 +65,7 @@ pub fn parse_unified_diff(patch: &str) -> Vec<PatchFileDiff> {
             current_hunk = None;
         } else if line.starts_with("+++ ") {
             if let Some(ref mut f) = current_file {
-                let new_path = line[4..].trim().to_string();
+                let new_path = parse_diff_header_path(&line[4..]);
                 f.new_path = strip_prefix_ab(&new_path);
                 // Derive status
                 if f.old_path == "/dev/null" {
@@ -144,6 +144,43 @@ fn strip_prefix_ab(path: &str) -> String {
     } else {
         path.to_string()
     }
+}
+
+fn parse_diff_header_path(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed == "/dev/null" {
+        return trimmed.to_string();
+    }
+
+    if let Some((path, _)) = trimmed.split_once('\t') {
+        return path.trim_end().to_string();
+    }
+
+    for (idx, _) in trimmed.char_indices() {
+        if looks_like_diff_timestamp(&trimmed[idx..]) {
+            let prefix = &trimmed[..idx];
+            if prefix
+                .chars()
+                .last()
+                .map(|ch| ch.is_whitespace())
+                .unwrap_or(false)
+            {
+                return prefix.trim_end().to_string();
+            }
+        }
+    }
+
+    trimmed.to_string()
+}
+
+fn looks_like_diff_timestamp(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    bytes.len() >= 10
+        && bytes[0..4].iter().all(u8::is_ascii_digit)
+        && bytes[4] == b'-'
+        && bytes[5..7].iter().all(u8::is_ascii_digit)
+        && bytes[7] == b'-'
+        && bytes[8..10].iter().all(u8::is_ascii_digit)
 }
 
 fn parse_hunk_header(line: &str) -> Option<(usize, usize, usize, usize)> {
@@ -277,6 +314,28 @@ Differences ...
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].old_path, "//depot/main/foo.cpp#7");
         assert_eq!(files[0].new_path, "C:\\work\\foo.cpp");
+        assert_eq!(files[0].hunks.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_p4_unified_diff_with_timestamps() {
+        let patch = "\
+--- //gs-games/Collegefb/2027/dl/FootballTools/cstudio/src/cstudio.env  2026-04-20 18:12:23.000000000 -0700
++++ E:\\OnlineBranches\\gs_fb_cfb_dl\\FootballTools\\cstudio\\src\\cstudio.env\t2026-04-20 18:12:23.000000000 -0700
+@@ -10,1 +10,1 @@
+-WEB_PORT=5000
++WEB_PORT=22000
+";
+        let files = parse_unified_diff(patch);
+        assert_eq!(files.len(), 1);
+        assert_eq!(
+            files[0].old_path,
+            "//gs-games/Collegefb/2027/dl/FootballTools/cstudio/src/cstudio.env"
+        );
+        assert_eq!(
+            files[0].new_path,
+            "E:\\OnlineBranches\\gs_fb_cfb_dl\\FootballTools\\cstudio\\src\\cstudio.env"
+        );
         assert_eq!(files[0].hunks.len(), 1);
     }
 }
