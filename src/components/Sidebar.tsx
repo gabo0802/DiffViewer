@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import * as api from "../api";
+import { buildDisambiguatedPathLabels } from "../pathLabels";
 import FormDialog, { type FormDialogField } from "./FormDialog";
 import type { Workspace, DiffSet, FileDiff } from "../types";
 
@@ -287,6 +288,13 @@ function DiffSetRow({
   const meta = parseMeta(diffset.source_meta_json);
   const isP4 = diffset.provider === "p4";
   const count = meta.file_count ?? filediffs?.length;
+  const fileLabels = useMemo(
+    () =>
+      buildDisambiguatedPathLabels(
+        (filediffs ?? []).map((fd) => ({ id: fd.filediff_id, path: fd.display_path }))
+      ),
+    [filediffs]
+  );
 
   return (
     <div className="sidebar-diffset">
@@ -325,9 +333,10 @@ function DiffSetRow({
             key={fd.filediff_id}
             className="sidebar-file-btn"
             onClick={() => onSelectFileDiff(fd)}
+            title={fd.display_path}
           >
             <span className={`status-dot status-${statusClass(fd.status)}`} />
-            <span className="file-path">{fd.display_path}</span>
+            <span className="file-path">{fileLabels[fd.filediff_id] ?? fd.display_path}</span>
             <span className="file-action">{fd.status}</span>
           </button>
         ))}
