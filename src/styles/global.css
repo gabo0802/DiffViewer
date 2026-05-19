@@ -132,13 +132,19 @@ html, body, #root {
 .icon-button,
 .toolbar-button,
 .btn-merge-toggle,
-.diff-nav button,
 .merge-toolbar button,
 .sidebar-select,
 .dialog-field input,
 .dialog-field select {
   background: none;
   border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+}
+
+.diff-nav button {
+  background: none;
+  border: 1px solid transparent;
   color: var(--text);
   border-radius: 6px;
 }
