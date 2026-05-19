@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { FolderIcon, LoadingIcon } from "./Icons";
 
 export type FormDialogField = {
   id: string;
@@ -6,6 +7,8 @@ export type FormDialogField = {
   defaultValue?: string;
   placeholder?: string;
   required?: boolean;
+  actionTitle?: string;
+  actionIcon?: "folder";
 };
 
 interface Props {
@@ -17,6 +20,7 @@ interface Props {
   visible: boolean;
   onCancel: () => void;
   onConfirm: (values: Record<string, string>) => Promise<void> | void;
+  onFieldAction?: (fieldId: string, currentValue: string) => Promise<string | void> | string | void;
 }
 
 export default function FormDialog({
@@ -28,6 +32,7 @@ export default function FormDialog({
   visible,
   onCancel,
   onConfirm,
+  onFieldAction,
 }: Props) {
   const initialValues = useMemo(
     () =>
@@ -36,11 +41,13 @@ export default function FormDialog({
   );
   const [values, setValues] = useState<Record<string, string>>(initialValues);
   const [submitting, setSubmitting] = useState(false);
+  const [actionFieldId, setActionFieldId] = useState<string | null>(null);
 
   useEffect(() => {
     if (visible) {
       setValues(initialValues);
       setSubmitting(false);
+      setActionFieldId(null);
     }
   }, [initialValues, visible]);
 
@@ -59,6 +66,22 @@ export default function FormDialog({
     }
   };
 
+  const handleFieldAction = async (field: FormDialogField) => {
+    if (!onFieldAction || !field.actionIcon || actionFieldId || submitting) return;
+    setActionFieldId(field.id);
+    try {
+      const result = await onFieldAction(field.id, values[field.id] ?? "");
+      if (typeof result === "string") {
+        setValues((current) => ({
+          ...current,
+          [field.id]: result,
+        }));
+      }
+    } finally {
+      setActionFieldId(null);
+    }
+  };
+
   return (
     <div className="dialog-backdrop" onClick={onCancel}>
       <form className="dialog-card" onClick={(event) => event.stopPropagation()} onSubmit={handleSubmit}>
@@ -70,17 +93,34 @@ export default function FormDialog({
           {fields.map((field) => (
             <label key={field.id} className="dialog-field">
               <span>{field.label}</span>
-              <input
-                autoFocus={field.id === fields[0]?.id}
-                value={values[field.id] ?? ""}
-                placeholder={field.placeholder}
-                onChange={(event) =>
-                  setValues((current) => ({
-                    ...current,
-                    [field.id]: event.target.value,
-                  }))
-                }
-              />
+              <div className="dialog-input-row">
+                <input
+                  autoFocus={field.id === fields[0]?.id}
+                  value={values[field.id] ?? ""}
+                  placeholder={field.placeholder}
+                  onChange={(event) =>
+                    setValues((current) => ({
+                      ...current,
+                      [field.id]: event.target.value,
+                    }))
+                  }
+                />
+                {field.actionIcon && (
+                  <button
+                    type="button"
+                    className="icon-button icon-button-square dialog-input-action"
+                    title={field.actionTitle}
+                    onClick={() => handleFieldAction(field)}
+                    disabled={submitting || actionFieldId === field.id}
+                  >
+                    {actionFieldId === field.id ? (
+                      <LoadingIcon className="button-icon-spin" />
+                    ) : field.actionIcon === "folder" ? (
+                      <FolderIcon />
+                    ) : null}
+                  </button>
+                )}
+              </div>
             </label>
           ))}
         </div>

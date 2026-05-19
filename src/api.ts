@@ -48,6 +48,9 @@ export const removeCurrentWorkspaceLocation = (
     locationId,
   });
 
+export const browseForDirectory = (initialPath?: string) =>
+  invoke<string | null>("browse_for_directory", { initialPath });
+
 // Diff creation
 
 export const importPatch = (path: string) =>

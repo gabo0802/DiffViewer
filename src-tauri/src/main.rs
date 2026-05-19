@@ -36,6 +36,7 @@ fn main() {
             commands::workspace::save_current_workspace_location,
             commands::workspace::select_current_workspace_location,
             commands::workspace::remove_current_workspace_location,
+            commands::system::browse_for_directory,
             commands::diff::import_patch,
             commands::diff::compare_two_files,
             commands::diff::import_git_working_tree,
