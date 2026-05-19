@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import type { GitCommitSummary, P4PendingChangeSummary } from "../types";
+import type {
+  GitCommitSummary,
+  P4PendingChangeSummary,
+  SavedWorkspaceLocation,
+} from "../types";
 import { LoadingIcon } from "./Icons";
 
 export type AddDiffImportKind =
@@ -20,10 +24,13 @@ export interface AddDiffRequest {
 interface Props {
   visible: boolean;
   importing: boolean;
-  currentGitPath: string | null;
-  currentP4Path: string | null;
+  gitLocations: SavedWorkspaceLocation[];
+  p4Locations: SavedWorkspaceLocation[];
+  selectedGitLocationId: string | null;
+  selectedP4LocationId: string | null;
   onCancel: () => void;
   onSubmit: (request: AddDiffRequest) => Promise<void> | void;
+  onSelectLocation: (provider: ProviderMode, locationId: string | null) => Promise<void> | void;
   loadGitCommits: (repoPath: string) => Promise<GitCommitSummary[]>;
   loadP4PendingChanges: (cwd: string) => Promise<P4PendingChangeSummary[]>;
 }
@@ -34,17 +41,20 @@ type LookupState = "idle" | "loading" | "ready" | "error";
 export default function AddDiffDialog({
   visible,
   importing,
-  currentGitPath,
-  currentP4Path,
+  gitLocations,
+  p4Locations,
+  selectedGitLocationId,
+  selectedP4LocationId,
   onCancel,
   onSubmit,
+  onSelectLocation,
   loadGitCommits,
   loadP4PendingChanges,
 }: Props) {
   const defaultProvider = useMemo<ProviderMode>(() => {
-    if (currentP4Path) return "p4";
+    if (selectedP4LocationId) return "p4";
     return "git";
-  }, [currentP4Path]);
+  }, [selectedP4LocationId]);
   const [provider, setProvider] = useState<ProviderMode>(defaultProvider);
   const [gitMode, setGitMode] = useState<"gitWorking" | "gitCommit">("gitWorking");
   const [p4Mode, setP4Mode] = useState<"p4Pending" | "p4Submitted" | "p4Shelved">("p4Pending");
@@ -68,6 +78,17 @@ export default function AddDiffDialog({
     setLookupError(null);
   }, [defaultProvider, visible]);
 
+  const selectedGitLocation = useMemo(
+    () => gitLocations.find((location) => location.id === selectedGitLocationId) ?? null,
+    [gitLocations, selectedGitLocationId]
+  );
+  const selectedP4Location = useMemo(
+    () => p4Locations.find((location) => location.id === selectedP4LocationId) ?? null,
+    [p4Locations, selectedP4LocationId]
+  );
+  const activeLocation = provider === "git" ? selectedGitLocation : selectedP4Location;
+  const activePath = activeLocation?.path ?? null;
+
   useEffect(() => {
     if (!visible) return;
     let cancelled = false;
@@ -75,9 +96,9 @@ export default function AddDiffDialog({
     const run = async () => {
       try {
         setLookupError(null);
-        if (provider === "p4" && p4Mode === "p4Pending" && currentP4Path) {
+        if (provider === "p4" && p4Mode === "p4Pending" && activePath) {
           setLookupState("loading");
-          const nextChanges = await loadP4PendingChanges(currentP4Path);
+          const nextChanges = await loadP4PendingChanges(activePath);
           if (cancelled) return;
           setPendingChanges(nextChanges);
           setChange(nextChanges[0]?.change ?? "default");
@@ -85,9 +106,9 @@ export default function AddDiffDialog({
           return;
         }
 
-        if (provider === "git" && gitMode === "gitCommit" && currentGitPath) {
+        if (provider === "git" && gitMode === "gitCommit" && activePath) {
           setLookupState("loading");
-          const nextCommits = await loadGitCommits(currentGitPath);
+          const nextCommits = await loadGitCommits(activePath);
           if (cancelled) return;
           setGitCommits(nextCommits);
           setRev(nextCommits[0]?.rev ?? "HEAD");
@@ -108,8 +129,7 @@ export default function AddDiffDialog({
       cancelled = true;
     };
   }, [
-    currentGitPath,
-    currentP4Path,
+    activePath,
     gitMode,
     loadGitCommits,
     loadP4PendingChanges,
@@ -121,7 +141,6 @@ export default function AddDiffDialog({
   if (!visible) return null;
 
   const activeKind = provider === "git" ? gitMode : p4Mode;
-  const activePath = provider === "git" ? currentGitPath : currentP4Path;
   const pathLabel = provider === "git" ? "Current Git Directory" : "Current P4 Depot";
   const canSubmit =
     !!activePath &&
@@ -197,6 +216,12 @@ export default function AddDiffDialog({
                 onClick={() => setP4Mode("p4Shelved")}
               />
             </div>
+            <SavedLocationPicker
+              label={pathLabel}
+              locations={p4Locations}
+              selectedLocationId={selectedP4LocationId}
+              onChange={(locationId) => onSelectLocation("p4", locationId)}
+            />
             <PathSummary label={pathLabel} path={activePath} />
             {p4Mode === "p4Pending" ? (
               <label className="dialog-field">
@@ -249,6 +274,12 @@ export default function AddDiffDialog({
                 onClick={() => setGitMode("gitCommit")}
               />
             </div>
+            <SavedLocationPicker
+              label={pathLabel}
+              locations={gitLocations}
+              selectedLocationId={selectedGitLocationId}
+              onChange={(locationId) => onSelectLocation("git", locationId)}
+            />
             <PathSummary label={pathLabel} path={activePath} />
             {gitMode === "gitCommit" && (
               <>
@@ -276,12 +307,10 @@ export default function AddDiffDialog({
                   />
                 </label>
                 <label className="dialog-field">
-                  <span>Revision</span>
-                  <input
-                    value={rev}
-                    placeholder="Commit SHA, branch, or revision"
-                    onChange={(event) => setRev(event.target.value)}
-                  />
+                  <span>Selected commit</span>
+                  <div className="dialog-static-value" title={rev}>
+                    {gitCommits.find((commit) => commit.rev === rev)?.shortRev ?? rev}
+                  </div>
                 </label>
               </>
             )}
@@ -337,6 +366,35 @@ function PathSummary({ label, path }: { label: string; path: string | null }) {
         {path ?? "No saved directory selected"}
       </div>
     </div>
+  );
+}
+
+function SavedLocationPicker({
+  label,
+  locations,
+  selectedLocationId,
+  onChange,
+}: {
+  label: string;
+  locations: SavedWorkspaceLocation[];
+  selectedLocationId: string | null;
+  onChange: (locationId: string | null) => Promise<void> | void;
+}) {
+  return (
+    <label className="dialog-field">
+      <span>{label}</span>
+      <select
+        value={selectedLocationId ?? ""}
+        onChange={(event) => onChange(event.target.value || null)}
+      >
+        <option value="">Directory...</option>
+        {locations.map((location) => (
+          <option key={location.id} value={location.id}>
+            {location.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
