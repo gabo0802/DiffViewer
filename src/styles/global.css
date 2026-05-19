@@ -336,11 +336,18 @@ html, body, #root {
   background: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .sidebar-diffset-close:hover {
   color: var(--text);
   background: var(--hover-bg);
+}
+
+.sidebar-diffset-close svg {
+  width: 14px;
+  height: 14px;
 }
 
 .chevron { font-size: 10px; width: 12px; }
@@ -491,8 +498,9 @@ html, body, #root {
   height: 18px;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 12px;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0;
   border-radius: 3px;
   flex: 0 0 auto;
@@ -501,6 +509,11 @@ html, body, #root {
   color: var(--text);
   border-color: var(--border);
   background: var(--hover-bg);
+}
+
+.tab-close svg {
+  width: 12px;
+  height: 12px;
 }
 
 .toolbar-actions {
