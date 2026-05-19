@@ -3,7 +3,7 @@ import * as api from "./api";
 import Sidebar from "./components/Sidebar";
 import DiffViewer from "./components/DiffViewer";
 import MergePanel from "./components/MergePanel";
-import { EditIcon, ThemeIcon } from "./components/Icons";
+import { CloseIcon, EditIcon, ThemeIcon } from "./components/Icons";
 import {
   loadEditorPreferences,
   type EditorPreferences,
@@ -126,7 +126,7 @@ export default function App() {
                   closeTab(fd.filediff_id);
                 }}
               >
-                x
+                <CloseIcon />
               </button>
             </div>
           ))}

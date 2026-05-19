@@ -10,7 +10,7 @@ import type {
 } from "../types";
 import AddDiffDialog, { type AddDiffRequest } from "./AddDiffDialog";
 import FormDialog from "./FormDialog";
-import { LoadingIcon, PlusIcon } from "./Icons";
+import { CloseIcon, LoadingIcon, PlusIcon } from "./Icons";
 
 interface Props {
   onSelectFileDiff: (fd: FileDiff) => void;
@@ -405,7 +405,7 @@ function SavedDirectoryField({
           onClick={onRemove}
           disabled={!selectedLocation}
         >
-          x
+          <CloseIcon />
         </button>
       </div>
       <div className="sidebar-directory-path" title={selectedLocation?.path ?? ""}>
@@ -471,7 +471,7 @@ function DiffSetRow({
             onRemove();
           }}
         >
-          x
+          <CloseIcon />
         </button>
       </div>
       <div className="diffset-meta">

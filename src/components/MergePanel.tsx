@@ -4,7 +4,6 @@ import * as api from "../api";
 import {
   extractVirtualText,
   parseHunks,
-  suggestedSavePath,
   type ParsedHunk,
 } from "../diffDomain";
 import {
@@ -12,9 +11,8 @@ import {
   resolveEditorLanguage,
   type EditorPreferences,
 } from "../editorPreferences";
-import FormDialog from "./FormDialog";
 import type { FileDiff, MergeBuffer } from "../types";
-import { EditIcon, LoadingIcon, SaveIcon } from "./Icons";
+import { CloseIcon, EditIcon, LoadingIcon, SaveIcon } from "./Icons";
 
 interface Props {
   fileDiff: FileDiff;
@@ -48,7 +46,6 @@ export default function MergePanel({
   const [height, setHeight] = useState(320);
   const [isResizing, setIsResizing] = useState(false);
   const [showEditorSettings, setShowEditorSettings] = useState(false);
-  const [saveAsVisible, setSaveAsVisible] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -117,44 +114,9 @@ export default function MergePanel({
       await onSaveComplete?.();
     } catch (e: any) {
       const message = e?.toString?.() ?? String(e);
-      if (message.toLowerCase().includes("save as required")) {
-        setSaveAsVisible(true);
-      } else {
-        setSaveError(`Save failed: ${message}`);
-      }
+      setSaveError(`Save failed: ${message}`);
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handleSaveAs = () => {
-    setSaveError(null);
-    setSaveAsVisible(true);
-  };
-
-  const submitSaveAs = async (values: Record<string, string>) => {
-    const path = values.path.trim();
-    if (!path) return;
-    setIsSaving(true);
-    try {
-      await api.setMergebufferText(fileDiff.filediff_id, mergedText);
-      await api.saveMergebufferAs(fileDiff.filediff_id, path);
-      setBuffer((prev) => (prev ? { ...prev, dirty: false } : prev));
-      setSaveAsVisible(false);
-      await onSaveComplete?.();
-    } catch (e) {
-      setSaveError(`Save As failed: ${String(e)}`);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleFormat = async () => {
-    if (!editorRef.current) return;
-    try {
-      await editorRef.current.getAction("editor.action.formatDocument")?.run();
-    } catch (error) {
-      setSaveError(`Format failed: ${String(error)}`);
     }
   };
 
@@ -194,7 +156,6 @@ export default function MergePanel({
         <span className="merge-title">Merged Output</span>
         <span className="merge-dirty">{buffer?.dirty ? "* unsaved" : ""}</span>
         <span className="merge-language">{editorLanguage}</span>
-        <button type="button" onClick={handleFormat}>Format</button>
         <button
           type="button"
           onClick={() => setShowEditorSettings((current) => !current)}
@@ -202,15 +163,23 @@ export default function MergePanel({
           <EditIcon />
           <span>Editor</span>
         </button>
-        <button type="button" onClick={handleSave} disabled={isSaving}>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={isSaving}
+          className="icon-button icon-button-square"
+          title="Save merged output"
+        >
           {isSaving ? <LoadingIcon className="button-icon-spin" /> : <SaveIcon />}
-          <span>{isSaving ? "Saving..." : "Save"}</span>
         </button>
-        <button type="button" onClick={handleSaveAs} disabled={isSaving}>
-          <SaveIcon />
-          <span>Save As</span>
+        <button
+          type="button"
+          onClick={onToggle}
+          className="icon-button icon-button-square"
+          title="Close merge editor"
+        >
+          <CloseIcon />
         </button>
-        <button type="button" onClick={onToggle}>Close</button>
       </div>
       {saveError && <div className="merge-error">{saveError}</div>}
       {showEditorSettings && (
@@ -308,23 +277,6 @@ export default function MergePanel({
           }}
         />
       </div>
-      <FormDialog
-        visible={saveAsVisible}
-        title="Save Merged Output"
-        description="Enter the target path for the merged file."
-        confirmLabel="Save"
-        onCancel={() => setSaveAsVisible(false)}
-        onConfirm={submitSaveAs}
-        fields={[
-          {
-            id: "path",
-            label: "Path",
-            defaultValue: suggestedSavePath(fileDiff),
-            placeholder: "Path to save merged output",
-            required: true,
-          },
-        ]}
-      />
     </div>
   );
 }
