@@ -478,7 +478,7 @@ function DiffSetRow({
           <button
             key={fd.filediff_id}
             className="sidebar-file-btn"
-            onClick={() => onSelectFileDiff(fd)}
+            onClick={() => onSelectFileDiff({ ...fd, diffset_kind: diffset.kind })}
             title={fd.display_path}
           >
             <span className={`status-dot status-${statusClass(fd.status)}`} />

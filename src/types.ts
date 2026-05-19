@@ -52,6 +52,7 @@ export interface DiffSet {
 export interface FileDiff {
   filediff_id: string;
   diffset_id: string;
+  diffset_kind?: string;
   display_path: string;
   status: string;
   left_label: string;
