@@ -827,6 +827,17 @@ html, body, #root {
   font-size: 13px;
 }
 
+.dialog-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.dialog-input-action {
+  background: var(--panel-bg);
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;

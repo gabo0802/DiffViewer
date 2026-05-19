@@ -330,6 +330,11 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
         confirmLabel="Save"
         onCancel={() => setSaveDirectoryProvider(null)}
         onConfirm={handleSaveDirectory}
+        onFieldAction={async (fieldId, currentValue) => {
+          if (fieldId !== "path") return;
+          const selected = await api.browseForDirectory(currentValue || undefined);
+          return selected ?? undefined;
+        }}
         fields={[
           {
             id: "path",
@@ -343,6 +348,8 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
                 ? "Path to the Git repository"
                 : "Path inside the Perforce workspace",
             required: true,
+            actionTitle: "Browse for directory",
+            actionIcon: "folder",
           },
         ]}
       />
