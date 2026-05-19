@@ -253,7 +253,7 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
 
       <div className="sidebar-controls">
         <SavedDirectoryField
-          label="Current P4 Depot"
+          label="P4 Depot"
           provider="p4"
           locations={settings.savedP4Directories}
           selectedLocation={selectedP4Location}
@@ -262,7 +262,7 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
           onRemove={() => handleRemoveDirectory("p4", selectedP4Location)}
         />
         <SavedDirectoryField
-          label="Current Git Directory"
+          label="Git Directory"
           provider="git"
           locations={settings.savedGitDirectories}
           selectedLocation={selectedGitLocation}
@@ -376,7 +376,7 @@ function SavedDirectoryField({
 }) {
   return (
     <div className="sidebar-directory-card">
-      <div className="sidebar-directory-label">{label}</div>
+      <div className="sidebar-directory-label">Current {label}</div>
       <div className="sidebar-directory-row">
         <select
           className="sidebar-select"
