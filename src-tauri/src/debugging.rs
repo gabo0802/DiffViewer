@@ -111,6 +111,7 @@ fn count_lines(text: &str) -> usize {
     text.split('\n').count()
 }
 
+#[cfg(test)]
 fn debug_enabled_from<F>(args: &[String], env_lookup: F) -> bool
 where
     F: Fn(&str) -> Option<String>,
@@ -118,6 +119,7 @@ where
     args.iter().any(|arg| arg == "--debug") || env_flag_enabled(&env_lookup, "npm_config_debug")
 }
 
+#[cfg(test)]
 fn env_flag_enabled<F>(env_lookup: F, key: &str) -> bool
 where
     F: Fn(&str) -> Option<String>,

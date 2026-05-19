@@ -1,4 +1,4 @@
-import React, { useId } from "react";
+import React from "react";
 
 type IconProps = React.SVGProps<SVGSVGElement> & {
   size?: number;
@@ -78,53 +78,17 @@ export function NextIcon({ size = 18, ...props }: IconProps) {
 }
 
 export function ThemeIcon({
-  mode,
   size = 18,
   ...props
 }: IconProps & {
   mode: "dark" | "light";
 }) {
-  const maskA = useId().replace(/:/g, "");
-  const maskB = useId().replace(/:/g, "");
-  const isLight = mode === "light";
-
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" {...props}>
-      <defs>
-        <mask id={maskA}>
-          <circle cx={isLight ? 11 : 7.5} cy="7.5" r={isLight ? 6.5 : 5.5} fill="#fff" />
-          <circle cx={isLight ? 7.5 : 11} cy="7.5" r={isLight ? 5.5 : 6.5} />
-        </mask>
-        <mask id={maskB}>
-          <g fill="#fff">
-            <circle cx="12" cy={isLight ? 15 : 9} r="5.5" transform="rotate(-45 12 12)" />
-            {isLight &&
-              [-120, -70, -20, 30].map((rotation) => (
-                <path
-                  key={rotation}
-                  d="M12.62 20.62h3l-1.5 2.5Z"
-                  transform={`rotate(${rotation} 14.12 14.12)`}
-                />
-              ))}
-          </g>
-          <path d="M-4.97 12l18.38 -18.38l10.61 10.61l-18.38 18.38Z" />
-        </mask>
-      </defs>
-      <g fill="currentColor">
-        <path d="M0 0h24v24H0z" mask={`url(#${maskA})`} />
-        <path d="M0 0h24v24H0z" mask={`url(#${maskB})`} />
-      </g>
-      {isLight && (
-        <path
-          fill="none"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="2"
-          d="M23 12h-22"
-          transform="rotate(-45 12 12)"
-        />
-      )}
+      <path
+        fill="currentColor"
+        d="M12.741 20.917a9.4 9.4 0 0 1-1.395-.105a9.141 9.141 0 0 1-1.465-17.7a1.18 1.18 0 0 1 1.21.281a1.27 1.27 0 0 1 .325 1.293a8.1 8.1 0 0 0-.353 2.68a8.27 8.27 0 0 0 4.366 6.857a7.6 7.6 0 0 0 3.711.993a1.242 1.242 0 0 1 .994 1.963a9.15 9.15 0 0 1-7.393 3.738M10.261 4.05a.2.2 0 0 0-.065.011a8.137 8.137 0 1 0 9.131 12.526a.22.22 0 0 0 .013-.235a.23.23 0 0 0-.206-.136a8.6 8.6 0 0 1-4.188-1.116a9.27 9.27 0 0 1-4.883-7.7a9.1 9.1 0 0 1 .4-3.008a.29.29 0 0 0-.069-.285a.18.18 0 0 0-.133-.057"
+      />
     </svg>
   );
 }

@@ -839,7 +839,7 @@ fn derive_write_target(
             let resolved = Path::new(repo_path).join(display_path);
             WriteTarget::path(resolved.to_string_lossy())
         }
-        WriteTargetMode::GitCommit { .. } => WriteTarget::SaveAsRequired,
+        WriteTargetMode::GitCommit { .. } => WriteTarget::ReadOnly,
         WriteTargetMode::P4Pending { cwd, .. } => {
             if let Some(local_path) = pending_local_path(pf, cwd.as_deref()) {
                 WriteTarget::path(local_path)
@@ -1100,7 +1100,8 @@ pub fn parse_p4_opened(output: &str) -> Vec<P4OpenedFile> {
         .collect()
 }
 
-pub fn parse_p4_describe_actions(output: &str) -> HashMap<String, String> {
+#[cfg(test)]
+fn parse_p4_describe_actions(output: &str) -> HashMap<String, String> {
     describe_action_map(&parse_p4_describe_files(output))
 }
 

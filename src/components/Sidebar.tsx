@@ -308,10 +308,13 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
       <AddDiffDialog
         visible={addDiffVisible}
         importing={isImporting}
-        currentGitPath={selectedGitLocation?.path ?? null}
-        currentP4Path={selectedP4Location?.path ?? null}
+        gitLocations={settings.savedGitDirectories}
+        p4Locations={settings.savedP4Directories}
+        selectedGitLocationId={settings.selectedGitDirectoryId}
+        selectedP4LocationId={settings.selectedP4DirectoryId}
         onCancel={() => setAddDiffVisible(false)}
         onSubmit={handleAddDiff}
+        onSelectLocation={handleSelectDirectory}
         loadGitCommits={(repoPath) => api.listGitCommits(repoPath)}
         loadP4PendingChanges={(cwd) => api.listP4PendingChanges(cwd)}
       />
