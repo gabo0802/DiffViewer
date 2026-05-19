@@ -53,6 +53,9 @@ export function extractVirtualText(json: string): string {
 }
 
 export function isEditableFileDiff(fileDiff: FileDiff) {
+  if (fileDiff.diffset_kind === "gitCommit") {
+    return false;
+  }
   return parseWriteTarget(fileDiff.write_target_json)?.type !== "read_only";
 }
 
