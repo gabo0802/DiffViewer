@@ -171,7 +171,7 @@ export default function DiffViewer({
           </button>
           <span>
             {model
-              ? `Hunk ${model.hunks.length === 0 ? 0 : currentHunkIdx + 1}/${model.hunks.length}`
+              ? `Change: ${model.hunks.length === 0 ? 0 : currentHunkIdx + 1}/${model.hunks.length} `
               : "-"}
           </span>
           <button onClick={() => goHunk(1)} title="Next hunk">
