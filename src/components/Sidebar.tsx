@@ -10,7 +10,7 @@ import type {
 } from "../types";
 import AddDiffDialog, { type AddDiffRequest } from "./AddDiffDialog";
 import FormDialog from "./FormDialog";
-import { LoadingIcon, SaveIcon } from "./Icons";
+import { LoadingIcon, PlusIcon } from "./Icons";
 
 interface Props {
   onSelectFileDiff: (fd: FileDiff) => void;
@@ -386,10 +386,10 @@ function SavedDirectoryField({
         <button
           type="button"
           className="icon-button icon-button-square"
-          title={`Save ${label}`}
+          title={`Add ${label}`}
           onClick={onSave}
         >
-          <SaveIcon />
+          <PlusIcon />
         </button>
         <button
           type="button"

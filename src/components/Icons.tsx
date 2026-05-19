@@ -48,6 +48,34 @@ export function SaveIcon({ size = 18, ...props }: IconProps) {
   );
 }
 
+export function PlusIcon({ size = 18, ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" {...props}>
+      <g
+        fill="none"
+        stroke="currentColor"
+        strokeDasharray="16"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      >
+        <path d="M5 12h14">
+          <animate fill="freeze" attributeName="stroke-dashoffset" dur="0.5s" values="16;0" />
+        </path>
+        <path d="M12 5v14" strokeDashoffset="16">
+          <animate
+            fill="freeze"
+            attributeName="stroke-dashoffset"
+            begin="0.5s"
+            dur="0.5s"
+            to="0"
+          />
+        </path>
+      </g>
+    </svg>
+  );
+}
+
 export function EditIcon({ size = 18, ...props }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" {...props}>
