@@ -2,8 +2,11 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import * as api from "../api";
 import { resolveEditorLanguage, type EditorPreferences } from "../editorPreferences";
+import { useSplitPane } from "../hooks/useSplitPane";
 import type { FileDiff, RenderedDiffModel, AlignmentRow } from "../types";
 import { LoadingIcon, NextIcon, PrevIcon } from "./Icons";
+
+const DIFF_PANE_SPLIT_KEY = "diffviewer.diffPaneSplit";
 
 interface Props {
   fileDiff: FileDiff;
@@ -39,6 +42,12 @@ export default function DiffViewer({
   const lastAppliedSyncTokenRef = useRef(0);
   const editorLanguage = resolveEditorLanguage(fileDiff, editorPreferences);
   const showSinglePane = isAddedFileDiff(fileDiff);
+  const {
+    containerRef: editorSplitRef,
+    ratio: leftPaneRatio,
+    isResizing: isResizingEditors,
+    beginResize: beginEditorResize,
+  } = useSplitPane(readStoredDiffPaneSplit(), 220);
 
   useEffect(() => {
     setModel(null);
@@ -95,6 +104,10 @@ export default function DiffViewer({
     if (!model || !monacoRef.current) return;
     applyDecorations(model);
   }, [model]);
+
+  useEffect(() => {
+    window.localStorage.setItem(DIFF_PANE_SPLIT_KEY, String(leftPaneRatio));
+  }, [leftPaneRatio]);
 
   useEffect(() => {
     if (!syncedTopRow || !model || syncToken === 0) return;
@@ -180,7 +193,7 @@ export default function DiffViewer({
         </span>
       </div>
 
-      <div className="diff-editors">
+      <div className="diff-editors" ref={editorSplitRef}>
         {loadError && (
           <div className="empty-state" style={{ width: "100%" }}>
             Failed to render diff: {loadError}
@@ -203,7 +216,10 @@ export default function DiffViewer({
         {!loadError && model && model.rows.length > 0 && (
           <>
             {!showSinglePane && (
-              <div className="diff-editor-col">
+              <div
+                className="diff-editor-col diff-editor-col-split"
+                style={{ flexBasis: `${leftPaneRatio * 100}%` }}
+              >
                 <div className="editor-label">{fileDiff.left_label || "Left"}</div>
                 <Editor
                   key={`left-${fileDiff.filediff_id}-${model.rows.length}`}
@@ -217,6 +233,7 @@ export default function DiffViewer({
                     minimap: { enabled: false },
                     lineNumbers: "on",
                     scrollBeyondLastLine: false,
+                    automaticLayout: true,
                     renderLineHighlight: "none",
                     tabSize: editorPreferences.tabSize,
                     insertSpaces: editorPreferences.insertSpaces,
@@ -225,7 +242,21 @@ export default function DiffViewer({
                 />
               </div>
             )}
-            <div className={`diff-editor-col ${showSinglePane ? "diff-editor-col-full" : ""}`}>
+            {!showSinglePane && (
+              <div
+                className={`diff-editor-resizer ${
+                  isResizingEditors ? "diff-editor-resizer-active" : ""
+                }`}
+                onMouseDown={beginEditorResize}
+                title="Drag to resize diff panes"
+              />
+            )}
+            <div
+              className={`diff-editor-col ${
+                showSinglePane ? "diff-editor-col-full" : "diff-editor-col-split"
+              }`}
+              style={showSinglePane ? undefined : { flexBasis: `${(1 - leftPaneRatio) * 100}%` }}
+            >
               <div className="editor-label">{fileDiff.right_label || "Right"}</div>
               <Editor
                 key={`right-${fileDiff.filediff_id}-${model.rows.length}`}
@@ -239,6 +270,7 @@ export default function DiffViewer({
                   minimap: { enabled: false },
                   lineNumbers: "on",
                   scrollBeyondLastLine: false,
+                  automaticLayout: true,
                   renderLineHighlight: "none",
                   tabSize: editorPreferences.tabSize,
                   insertSpaces: editorPreferences.insertSpaces,
@@ -305,4 +337,15 @@ function gutterClassForRow(row: AlignmentRow, side: "left" | "right") {
 function isAddedFileDiff(fileDiff: FileDiff) {
   const status = fileDiff.status.toLowerCase();
   return status === "add" || status === "added";
+}
+
+function readStoredDiffPaneSplit() {
+  const raw = window.localStorage.getItem(DIFF_PANE_SPLIT_KEY);
+  if (!raw) return 0.5;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? clamp(parsed, 0.2, 0.8) : 0.5;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
