@@ -23,38 +23,63 @@ interface Props {
   onEditorPreferencesChange: React.Dispatch<React.SetStateAction<EditorPreferences>>;
 }
 
+type SyntaxOverrideRow = {
+  id: string;
+  extension: string;
+  language: string;
+};
+
 export default function SettingsPanel({
   editorPreferences,
   onEditorPreferencesChange,
 }: Props) {
-  const [newExtension, setNewExtension] = useState("");
-  const [newLanguage, setNewLanguage] = useState("plaintext");
+  const [overrideRows, setOverrideRows] = useState(() =>
+    rowsFromOverrides(editorPreferences.extensionLanguageOverrides)
+  );
 
   const syntaxLanguages = useMemo(
     () => LANGUAGE_OPTIONS.filter((option) => option.value !== "auto"),
     []
   );
 
-  const overrideEntries = useMemo(
-    () =>
-      Object.entries(editorPreferences.extensionLanguageOverrides).sort(([left], [right]) =>
-        left.localeCompare(right)
-      ),
-    [editorPreferences.extensionLanguageOverrides]
-  );
-
-  const addOverride = () => {
-    const extension = normalizeExtensionKey(newExtension);
-    if (!extension) return;
-
+  const syncOverrides = (nextRows: SyntaxOverrideRow[]) => {
+    setOverrideRows(nextRows);
     onEditorPreferencesChange((current) => ({
       ...current,
-      extensionLanguageOverrides: {
-        ...current.extensionLanguageOverrides,
-        [extension]: newLanguage,
-      },
+      extensionLanguageOverrides: rowsToOverrides(nextRows),
     }));
-    setNewExtension("");
+  };
+
+  const addOverrideRow = () => {
+    syncOverrides([
+      ...overrideRows,
+      {
+        id: createRowId(),
+        extension: "",
+        language: "plaintext",
+      },
+    ]);
+  };
+
+  const updateOverrideRow = (
+    rowId: string,
+    field: keyof Omit<SyntaxOverrideRow, "id">,
+    value: string
+  ) => {
+    syncOverrides(
+      overrideRows.map((row) =>
+        row.id === rowId
+          ? {
+              ...row,
+              [field]: value,
+            }
+          : row
+      )
+    );
+  };
+
+  const removeOverrideRow = (rowId: string) => {
+    syncOverrides(overrideRows.filter((row) => row.id !== rowId));
   };
 
   return (
@@ -90,92 +115,72 @@ export default function SettingsPanel({
           <span className="settings-section-helper">Pre-set Monaco languages</span>
         </div>
 
-        <div className="settings-syntax-add">
-          <label className="settings-field">
-            <span>File format</span>
-            <input
-              type="text"
-              list="diffviewer-file-formats"
-              value={newExtension}
-              onChange={(event) => setNewExtension(event.target.value)}
-              placeholder="log"
-            />
-          </label>
-          <label className="settings-field">
-            <span>Syntax highlighter</span>
-            <select value={newLanguage} onChange={(event) => setNewLanguage(event.target.value)}>
-              {syntaxLanguages.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            className="toolbar-button toolbar-button-with-icon"
-            onClick={addOverride}
-            disabled={!normalizeExtensionKey(newExtension)}
-          >
-            <PlusIcon />
-            <span>Add Mapping</span>
-          </button>
-          <datalist id="diffviewer-file-formats">
-            {FILE_FORMAT_OPTIONS.map((option) => (
-              <option key={option.extension} value={option.extension}>
-                {option.extension}
-              </option>
-            ))}
-          </datalist>
-        </div>
-
-        {overrideEntries.length === 0 ? (
+        {overrideRows.length === 0 ? (
           <div className="settings-empty">
-            No custom file-format mappings yet. Add an extension like `log`, `tmpl`, or `shader`
-            and assign one of the built-in syntax highlighters.
+            No custom file-format mappings yet. Use the plus button to add an extension like
+            `log`, `tmpl`, or `shader` and assign one of the built-in syntax highlighters.
           </div>
         ) : (
           <div className="settings-override-list">
-            {overrideEntries.map(([extension, language]) => (
-              <div key={extension} className="settings-override-row">
-                <span className="settings-extension-pill">.{extension}</span>
-                <select
-                  value={language}
-                  onChange={(event) =>
-                    onEditorPreferencesChange((current) => ({
-                      ...current,
-                      extensionLanguageOverrides: {
-                        ...current.extensionLanguageOverrides,
-                        [extension]: event.target.value,
-                      },
-                    }))
-                  }
-                >
-                  {syntaxLanguages.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+            {overrideRows.map((row) => (
+              <div key={row.id} className="settings-override-row">
+                <label className="settings-field">
+                  <span>File format</span>
+                  <input
+                    type="text"
+                    list="diffviewer-file-formats"
+                    value={row.extension}
+                    onChange={(event) => updateOverrideRow(row.id, "extension", event.target.value)}
+                    placeholder="log"
+                  />
+                </label>
+                <label className="settings-field">
+                  <span>Syntax highlighter</span>
+                  <select
+                    value={row.language}
+                    onChange={(event) => updateOverrideRow(row.id, "language", event.target.value)}
+                  >
+                    {syntaxLanguages.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <button
                   type="button"
                   className="icon-button icon-button-square"
-                  title={`Remove .${extension} mapping`}
-                  onClick={() =>
-                    onEditorPreferencesChange((current) => {
-                      const nextOverrides = { ...current.extensionLanguageOverrides };
-                      delete nextOverrides[extension];
-                      return {
-                        ...current,
-                        extensionLanguageOverrides: nextOverrides,
-                      };
-                    })
-                  }
+                  title={`Remove ${row.extension || "empty"} mapping`}
+                  onClick={() => removeOverrideRow(row.id)}
                 >
                   <CloseIcon />
                 </button>
               </div>
             ))}
+          </div>
+        )}
+
+        <button
+          type="button"
+          className="toolbar-button toolbar-button-with-icon settings-add-button"
+          onClick={addOverrideRow}
+        >
+          <PlusIcon />
+          <span>Add Mapping</span>
+        </button>
+
+        <datalist id="diffviewer-file-formats">
+          {FILE_FORMAT_OPTIONS.map((option) => (
+            <option key={option.extension} value={option.extension}>
+              {option.extension}
+            </option>
+          ))}
+        </datalist>
+
+        {overrideRows.length > 0 && (
+          <div className="settings-helper-block">
+            Empty file-format rows are ignored until you type an extension. If two rows use the
+            same extension, the last one in the list wins.
           </div>
         )}
 
@@ -186,4 +191,30 @@ export default function SettingsPanel({
       </section>
     </div>
   );
+}
+
+function rowsFromOverrides(overrides: Record<string, string>) {
+  return Object.entries(overrides)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([extension, language]) => ({
+      id: createRowId(),
+      extension,
+      language,
+    }));
+}
+
+function rowsToOverrides(rows: SyntaxOverrideRow[]) {
+  return Object.fromEntries(
+    rows.flatMap((row) => {
+      const extension = normalizeExtensionKey(row.extension);
+      if (!extension) {
+        return [];
+      }
+      return [[extension, row.language]];
+    })
+  );
+}
+
+function createRowId() {
+  return `syntax-row-${Math.random().toString(36).slice(2, 10)}`;
 }
