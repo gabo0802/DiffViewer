@@ -153,6 +153,24 @@ html, body, #root {
   border-radius: 6px;
 }
 
+.sidebar-select,
+.dialog-field select,
+.editor-settings-field select,
+.settings-field select,
+.settings-override-row select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) calc(50% - 2px),
+    calc(100% - 11px) calc(50% - 2px);
+  background-repeat: no-repeat;
+  background-size: 5px 5px, 5px 5px;
+  padding-right: 34px;
+}
+
 .diff-nav button {
   background: none;
   border: 1px solid transparent;
@@ -264,9 +282,8 @@ html, body, #root {
 
 .sidebar-select {
   min-width: 0;
-  padding: 7px 10px;
+  padding: 7px 34px 7px 10px;
   background: var(--panel-bg);
-  appearance: none;
 }
 
 .sidebar-select option,
@@ -758,11 +775,15 @@ html, body, #root {
   padding: 10px 12px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--tab-bg) 78%, transparent);
-  align-items: end;
+  align-items: start;
 }
 
 .settings-override-row .icon-button-square {
-  align-self: end;
+  margin-top: 22px;
+}
+
+.settings-override-row .settings-field {
+  min-width: 0;
 }
 
 .settings-extension-pill {
