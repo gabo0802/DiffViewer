@@ -7,6 +7,7 @@ export type EditorPreferences = {
   tabSize: number;
   insertSpaces: boolean;
   wordWrap: WordWrapMode;
+  extensionLanguageOverrides: Record<string, string>;
 };
 
 export const DEFAULT_EDITOR_PREFERENCES: EditorPreferences = {
@@ -14,6 +15,7 @@ export const DEFAULT_EDITOR_PREFERENCES: EditorPreferences = {
   tabSize: 2,
   insertSpaces: true,
   wordWrap: "off",
+  extensionLanguageOverrides: {},
 };
 
 export const LANGUAGE_OPTIONS = [
@@ -25,12 +27,14 @@ export const LANGUAGE_OPTIONS = [
   { value: "rust", label: "Rust" },
   { value: "python", label: "Python" },
   { value: "go", label: "Go" },
+  { value: "c", label: "C" },
   { value: "cpp", label: "C++" },
   { value: "csharp", label: "C#" },
   { value: "java", label: "Java" },
   { value: "html", label: "HTML" },
   { value: "css", label: "CSS" },
   { value: "scss", label: "SCSS" },
+  { value: "less", label: "LESS" },
   { value: "markdown", label: "Markdown" },
   { value: "yaml", label: "YAML" },
   { value: "xml", label: "XML" },
@@ -40,7 +44,7 @@ export const LANGUAGE_OPTIONS = [
   { value: "toml", label: "TOML" },
 ];
 
-const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
+export const BUILTIN_EXTENSION_LANGUAGE_MAP: Record<string, string> = {
   ts: "typescript",
   tsx: "typescript",
   mts: "typescript",
@@ -80,6 +84,13 @@ const EXTENSION_LANGUAGE_MAP: Record<string, string> = {
   toml: "toml",
 };
 
+export const FILE_FORMAT_OPTIONS = Object.entries(BUILTIN_EXTENSION_LANGUAGE_MAP)
+  .map(([extension, language]) => ({
+    extension,
+    language,
+  }))
+  .sort((left, right) => left.extension.localeCompare(right.extension));
+
 export function loadEditorPreferences(storageKey: string) {
   const raw = window.localStorage.getItem(storageKey);
   if (!raw) return DEFAULT_EDITOR_PREFERENCES;
@@ -97,6 +108,7 @@ export function loadEditorPreferences(storageKey: string) {
           ? parsed.insertSpaces
           : DEFAULT_EDITOR_PREFERENCES.insertSpaces,
       wordWrap: normalizeWordWrap(parsed.wordWrap),
+      extensionLanguageOverrides: normalizeExtensionOverrides(parsed.extensionLanguageOverrides),
     };
   } catch {
     return DEFAULT_EDITOR_PREFERENCES;
@@ -109,13 +121,33 @@ export function resolveEditorLanguage(fileDiff: FileDiff, preferences: EditorPre
   }
 
   const extension = extensionForPath(fileDiff.display_path);
-  return EXTENSION_LANGUAGE_MAP[extension] ?? "plaintext";
+  return preferences.extensionLanguageOverrides[extension] ?? BUILTIN_EXTENSION_LANGUAGE_MAP[extension] ?? "plaintext";
 }
 
-function extensionForPath(path: string) {
+export function extensionForPath(path: string) {
   const normalized = path.split(/[\\/]/).pop() ?? path;
   const parts = normalized.toLowerCase().split(".");
   return parts.length > 1 ? parts.pop() ?? "" : "";
+}
+
+export function normalizeExtensionKey(value: string) {
+  return value.trim().toLowerCase().replace(/^\./, "");
+}
+
+function normalizeExtensionOverrides(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([extension, language]) => {
+      const normalizedExtension = normalizeExtensionKey(extension);
+      if (!normalizedExtension || typeof language !== "string") {
+        return [];
+      }
+      return [[normalizedExtension, language]];
+    })
+  );
 }
 
 function clampTabSize(value: unknown) {

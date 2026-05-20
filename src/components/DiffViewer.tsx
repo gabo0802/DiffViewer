@@ -13,6 +13,8 @@ interface Props {
   displayLabel?: string;
   editorPreferences: EditorPreferences;
   theme: "dark" | "light";
+  previousHunkToken?: number;
+  nextHunkToken?: number;
   onModelChange?: (model: RenderedDiffModel | null) => void;
   onScrollRowChange?: (topRow: number) => void;
   syncedTopRow?: number | null;
@@ -24,6 +26,8 @@ export default function DiffViewer({
   displayLabel,
   editorPreferences,
   theme,
+  previousHunkToken = 0,
+  nextHunkToken = 0,
   onModelChange,
   onScrollRowChange,
   syncedTopRow = null,
@@ -99,6 +103,16 @@ export default function DiffViewer({
     const lineNumber = model.hunks[currentHunkIdx].start_row + 1;
     revealAlignedLine(lineNumber);
   }, [model, currentHunkIdx]);
+
+  useEffect(() => {
+    if (previousHunkToken === 0) return;
+    goHunk(-1);
+  }, [goHunk, previousHunkToken]);
+
+  useEffect(() => {
+    if (nextHunkToken === 0) return;
+    goHunk(1);
+  }, [goHunk, nextHunkToken]);
 
   useEffect(() => {
     if (!model || !monacoRef.current) return;

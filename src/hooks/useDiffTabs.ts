@@ -31,6 +31,28 @@ export function useDiffTabs(onLastTabClosed?: () => void) {
     });
   };
 
+  const closeTabs = (ids: string[]) => {
+    const closingIds = new Set(ids);
+    setTabs((current) => {
+      if (closingIds.size === 0) {
+        return current;
+      }
+
+      const activeIndex = current.findIndex((tab) => tab.filediff_id === activeTab);
+      const activeWillClose = activeTab ? closingIds.has(activeTab) : false;
+      const nextTabs = current.filter((tab) => !closingIds.has(tab.filediff_id));
+
+      if (activeWillClose) {
+        const fallbackTab =
+          nextTabs[activeIndex] ?? nextTabs[Math.max(0, activeIndex - 1)] ?? nextTabs[0] ?? null;
+        setActiveTab(fallbackTab?.filediff_id ?? null);
+        if (!fallbackTab) onLastTabClosed?.();
+      }
+
+      return nextTabs;
+    });
+  };
+
   const currentFileDiff = tabs.find((tab) => tab.filediff_id === activeTab) ?? null;
   const tabLabels = useMemo(
     () =>
@@ -49,6 +71,7 @@ export function useDiffTabs(onLastTabClosed?: () => void) {
     tabLabels,
     openFileDiff,
     closeTab,
+    closeTabs,
     firstChangedMergeLine: currentFileDiff ? getFirstChangedMergeLine(currentFileDiff) : 1,
     canEditCurrent: currentFileDiff ? isEditableFileDiff(currentFileDiff) : false,
   };

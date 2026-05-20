@@ -488,8 +488,17 @@ html, body, #root {
   border-right: 1px solid var(--border);
   white-space: nowrap;
 }
+.tab-button {
+  background: none;
+  border: none;
+  font: inherit;
+}
 .tab:hover { color: var(--text); }
 .tab-active { background: var(--tab-active); color: var(--text); border-bottom: 2px solid var(--accent); }
+.tab-selected {
+  background: color-mix(in srgb, var(--accent) 12%, var(--tab-bg));
+  color: var(--text);
+}
 
 .tab-label {
   overflow: hidden;
@@ -520,6 +529,12 @@ html, body, #root {
 .tab-close svg {
   width: 12px;
   height: 12px;
+}
+
+.tab svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
 }
 
 .toolbar-actions {
@@ -579,6 +594,154 @@ html, body, #root {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+}
+
+.settings-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 16%, transparent), transparent 38%),
+    linear-gradient(180deg, color-mix(in srgb, var(--panel-bg) 90%, transparent), var(--bg));
+}
+
+.settings-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-title {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.settings-description {
+  margin-top: 8px;
+  max-width: 720px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel-bg) 92%, transparent);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+}
+
+.settings-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-section-header h3 {
+  font-size: 15px;
+}
+
+.settings-section-helper {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.settings-shortcut-list,
+.settings-override-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-shortcut-row,
+.settings-override-row {
+  display: grid;
+  gap: 12px;
+  align-items: center;
+}
+
+.settings-shortcut-row {
+  grid-template-columns: 180px minmax(0, 1fr);
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--tab-bg) 78%, transparent);
+}
+
+.settings-shortcut-keys {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.settings-shortcut-action {
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.settings-syntax-add {
+  display: grid;
+  grid-template-columns: minmax(0, 180px) minmax(0, 220px) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.settings-field input,
+.settings-field select,
+.settings-override-row select {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.settings-empty,
+.settings-helper-block {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.settings-override-row {
+  grid-template-columns: auto minmax(0, 220px) auto;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--tab-bg) 78%, transparent);
+}
+
+.settings-extension-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel-bg));
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
 }
 
 /* Diff viewer */
@@ -964,6 +1127,16 @@ html, body, #root {
 @media (max-width: 720px) {
   .sidebar-shell {
     min-width: 200px;
+  }
+
+  .settings-panel {
+    padding: 14px;
+  }
+
+  .settings-shortcut-row,
+  .settings-syntax-add,
+  .settings-override-row {
+    grid-template-columns: 1fr;
   }
 
   .editor-settings-panel {

@@ -15,6 +15,7 @@ import { CloseIcon, LoadingIcon, PlusIcon } from "./Icons";
 interface Props {
   onSelectFileDiff: (fd: FileDiff) => void;
   refreshToken?: number;
+  refreshCommandToken?: number;
 }
 
 type DiffSetMeta = {
@@ -37,7 +38,11 @@ const EMPTY_SETTINGS: WorkspaceSettings = {
   selectedP4DirectoryId: null,
 };
 
-export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
+export default function Sidebar({
+  onSelectFileDiff,
+  refreshToken = 0,
+  refreshCommandToken = 0,
+}: Props) {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [settings, setSettings] = useState<WorkspaceSettings>(EMPTY_SETTINGS);
   const [diffsets, setDiffsets] = useState<DiffSet[]>([]);
@@ -86,6 +91,11 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
       })
       .catch((err) => setError(String(err)));
   }, [expanded, loadDiffsets, refreshToken, workspace]);
+
+  useEffect(() => {
+    if (!workspace || refreshCommandToken === 0) return;
+    refreshFromSidebar().catch((err) => setError(String(err)));
+  }, [refreshCommandToken, workspace]);
 
   const grouped = useMemo(() => {
     const groups = new Map<string, DiffSet[]>();
