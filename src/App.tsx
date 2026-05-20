@@ -146,7 +146,7 @@ export default function App() {
           tagName === "select" ||
           target?.isContentEditable);
 
-      if (event.key === "Tab") {
+      if (event.key === "Tab" || event.key.toLowerCase() === "t") {
         if (tabs.length === 0) return;
         event.preventDefault();
         const currentIndex = tabs.findIndex((tab) => tab.filediff_id === activeTab);
