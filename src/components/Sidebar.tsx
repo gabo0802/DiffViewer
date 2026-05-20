@@ -15,6 +15,7 @@ import { CloseIcon, LoadingIcon, PlusIcon } from "./Icons";
 interface Props {
   onSelectFileDiff: (fd: FileDiff) => void;
   refreshToken?: number;
+  onRefreshWorkspace?: () => Promise<void>;
 }
 
 type DiffSetMeta = {
@@ -37,7 +38,11 @@ const EMPTY_SETTINGS: WorkspaceSettings = {
   selectedP4DirectoryId: null,
 };
 
-export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
+export default function Sidebar({
+  onSelectFileDiff,
+  refreshToken = 0,
+  onRefreshWorkspace,
+}: Props) {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [settings, setSettings] = useState<WorkspaceSettings>(EMPTY_SETTINGS);
   const [diffsets, setDiffsets] = useState<DiffSet[]>([]);
@@ -223,11 +228,15 @@ export default function Sidebar({ onSelectFileDiff, refreshToken = 0 }: Props) {
     setError(null);
     setIsRefreshing(true);
     try {
-      await loadDiffsets(workspace, true);
-      setFilediffs({});
-      if (expanded) {
-        const fds = await api.listFilediffs(expanded);
-        setFilediffs((prev) => ({ ...prev, [expanded]: fds }));
+      if (onRefreshWorkspace) {
+        await onRefreshWorkspace();
+      } else {
+        await loadDiffsets(workspace, true);
+        setFilediffs({});
+        if (expanded) {
+          const fds = await api.listFilediffs(expanded);
+          setFilediffs((prev) => ({ ...prev, [expanded]: fds }));
+        }
       }
     } catch (err) {
       setError(String(err));
