@@ -10,10 +10,12 @@ import type {
 } from "../types";
 import AddDiffDialog, { type AddDiffRequest } from "./AddDiffDialog";
 import FormDialog from "./FormDialog";
-import { CloseIcon, LoadingIcon, PlusIcon } from "./Icons";
+import { CloseIcon, LoadingIcon, PlusIcon, SettingsIcon } from "./Icons";
 
 interface Props {
   onSelectFileDiff: (fd: FileDiff) => void;
+  onOpenSettings?: () => void;
+  settingsActive?: boolean;
   refreshToken?: number;
   refreshCommandToken?: number;
 }
@@ -40,6 +42,8 @@ const EMPTY_SETTINGS: WorkspaceSettings = {
 
 export default function Sidebar({
   onSelectFileDiff,
+  onOpenSettings,
+  settingsActive = false,
   refreshToken = 0,
   refreshCommandToken = 0,
 }: Props) {
@@ -261,59 +265,75 @@ export default function Sidebar({
         </button>
       </div>
 
-      <div className="sidebar-controls">
-        <SavedDirectoryField
-          label="P4 Depot"
-          provider="p4"
-          locations={settings.savedP4Directories}
-          selectedLocation={selectedP4Location}
-          onSelect={handleSelectDirectory}
-          onSave={() => setSaveDirectoryProvider("p4")}
-          onRemove={() => handleRemoveDirectory("p4", selectedP4Location)}
-        />
-        <SavedDirectoryField
-          label="Git Directory"
-          provider="git"
-          locations={settings.savedGitDirectories}
-          selectedLocation={selectedGitLocation}
-          onSelect={handleSelectDirectory}
-          onSave={() => setSaveDirectoryProvider("git")}
-          onRemove={() => handleRemoveDirectory("git", selectedGitLocation)}
-        />
-        <button
-          type="button"
-          className="btn-merge-toggle sidebar-add-diff"
-          onClick={() => setAddDiffVisible(true)}
-        >
-          Add Diff
-        </button>
+      <div className="sidebar-content">
+        <div className="sidebar-controls">
+          <SavedDirectoryField
+            label="P4 Depot"
+            provider="p4"
+            locations={settings.savedP4Directories}
+            selectedLocation={selectedP4Location}
+            onSelect={handleSelectDirectory}
+            onSave={() => setSaveDirectoryProvider("p4")}
+            onRemove={() => handleRemoveDirectory("p4", selectedP4Location)}
+          />
+          <SavedDirectoryField
+            label="Git Directory"
+            provider="git"
+            locations={settings.savedGitDirectories}
+            selectedLocation={selectedGitLocation}
+            onSelect={handleSelectDirectory}
+            onSave={() => setSaveDirectoryProvider("git")}
+            onRemove={() => handleRemoveDirectory("git", selectedGitLocation)}
+          />
+          <button
+            type="button"
+            className="btn-merge-toggle sidebar-add-diff"
+            onClick={() => setAddDiffVisible(true)}
+          >
+            Add Diff
+          </button>
+        </div>
+
+        {error && <div className="sidebar-error">{error}</div>}
+
+        {diffsets.length === 0 && (
+          <div className="sidebar-empty">
+            No diffs yet. Save a Git or P4 directory above, then open a working tree, commit, or
+            changelist.
+          </div>
+        )}
+
+        {grouped.map(([provider, items]) => (
+          <section key={provider} className="sidebar-provider-group">
+            <div className="sidebar-section-label">{providerLabel(provider)}</div>
+            {items.map((ds) => (
+              <DiffSetRow
+                key={ds.diffset_id}
+                diffset={ds}
+                expanded={expanded === ds.diffset_id}
+                filediffs={filediffs[ds.diffset_id]}
+                onToggle={() => toggleDiffset(ds.diffset_id)}
+                onSelectFileDiff={onSelectFileDiff}
+                onRemove={() => removeDiffset(ds.diffset_id)}
+              />
+            ))}
+          </section>
+        ))}
       </div>
 
-      {error && <div className="sidebar-error">{error}</div>}
-
-      {diffsets.length === 0 && (
-        <div className="sidebar-empty">
-          No diffs yet. Save a Git or P4 directory above, then open a working tree, commit, or
-          changelist.
-        </div>
-      )}
-
-      {grouped.map(([provider, items]) => (
-        <section key={provider} className="sidebar-provider-group">
-          <div className="sidebar-section-label">{providerLabel(provider)}</div>
-          {items.map((ds) => (
-            <DiffSetRow
-              key={ds.diffset_id}
-              diffset={ds}
-              expanded={expanded === ds.diffset_id}
-              filediffs={filediffs[ds.diffset_id]}
-              onToggle={() => toggleDiffset(ds.diffset_id)}
-              onSelectFileDiff={onSelectFileDiff}
-              onRemove={() => removeDiffset(ds.diffset_id)}
-            />
-          ))}
-        </section>
-      ))}
+      <div className="sidebar-footer">
+        <button
+          type="button"
+          className={`toolbar-button toolbar-button-with-icon sidebar-settings-button ${
+            settingsActive ? "sidebar-settings-button-active" : ""
+          }`}
+          onClick={onOpenSettings}
+          title="Open settings"
+        >
+          <SettingsIcon />
+          <span>Settings</span>
+        </button>
+      </div>
 
       <AddDiffDialog
         visible={addDiffVisible}

@@ -95,7 +95,16 @@ html, body, #root {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidebar-content {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .sidebar-header {
@@ -413,6 +422,24 @@ html, body, #root {
   font-size: 12px;
 }
 .sidebar-file-btn:hover { background: var(--subtle-hover-bg); }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.sidebar-settings-button {
+  width: 100%;
+  justify-content: flex-start;
+  background: color-mix(in srgb, var(--panel-bg) 92%, transparent);
+}
+
+.sidebar-settings-button-active {
+  background: color-mix(in srgb, var(--accent) 20%, var(--panel-bg));
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
+  color: var(--text);
+}
 
 .file-path {
   flex: 1;

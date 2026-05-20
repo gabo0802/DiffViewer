@@ -4,7 +4,7 @@ import Sidebar from "./components/Sidebar";
 import DiffViewer from "./components/DiffViewer";
 import MergePanel from "./components/MergePanel";
 import SettingsPanel from "./components/SettingsPanel";
-import { CloseIcon, EditIcon, SettingsIcon, ThemeIcon } from "./components/Icons";
+import { CloseIcon, EditIcon, ThemeIcon } from "./components/Icons";
 import {
   loadEditorPreferences,
   type EditorPreferences,
@@ -215,6 +215,11 @@ export default function App() {
       <div className="sidebar-shell" style={{ width: sidebarWidth }}>
         <Sidebar
           onSelectFileDiff={handleSelectFileDiff}
+          onOpenSettings={() => {
+            setActiveWorkspaceView("settings");
+            setSelectedTabIds([]);
+          }}
+          settingsActive={activeWorkspaceView === "settings"}
           refreshToken={sidebarRefreshToken}
           refreshCommandToken={sidebarRefreshCommandToken}
         />
@@ -227,18 +232,6 @@ export default function App() {
 
       <main className="main">
         <div className="tab-bar">
-          <button
-            type="button"
-            className={`tab tab-button ${activeWorkspaceView === "settings" ? "tab-active" : ""}`}
-            onClick={() => {
-              setActiveWorkspaceView("settings");
-              setSelectedTabIds([]);
-            }}
-            title="Open settings"
-          >
-            <SettingsIcon />
-            <span className="tab-label">Settings</span>
-          </button>
           {tabs.map((fd) => (
             <div
               key={fd.filediff_id}
