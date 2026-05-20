@@ -31,39 +31,6 @@ export function useDiffTabs(onLastTabClosed?: () => void) {
     });
   };
 
-  const reconcileTabs = (latestByDiffset: Record<string, FileDiff[]>) => {
-    setTabs((current) => {
-      const activeIndex = current.findIndex((tab) => tab.filediff_id === activeTab);
-      let nextActiveTabId: string | null = null;
-
-      const nextTabs = current.flatMap((tab) => {
-        const replacement = latestByDiffset[tab.diffset_id]?.find(
-          (candidate) => candidate.display_path === tab.display_path
-        );
-        if (!replacement) {
-          return [];
-        }
-        if (tab.filediff_id === activeTab) {
-          nextActiveTabId = replacement.filediff_id;
-        }
-        return [replacement];
-      });
-
-      if (!nextActiveTabId) {
-        const fallbackTab =
-          nextTabs[activeIndex] ?? nextTabs[Math.max(0, activeIndex - 1)] ?? nextTabs[0] ?? null;
-        nextActiveTabId = fallbackTab?.filediff_id ?? null;
-      }
-
-      setActiveTab(nextActiveTabId);
-      if (!nextActiveTabId) {
-        onLastTabClosed?.();
-      }
-
-      return nextTabs;
-    });
-  };
-
   const currentFileDiff = tabs.find((tab) => tab.filediff_id === activeTab) ?? null;
   const tabLabels = useMemo(
     () =>
@@ -82,7 +49,6 @@ export function useDiffTabs(onLastTabClosed?: () => void) {
     tabLabels,
     openFileDiff,
     closeTab,
-    reconcileTabs,
     firstChangedMergeLine: currentFileDiff ? getFirstChangedMergeLine(currentFileDiff) : 1,
     canEditCurrent: currentFileDiff ? isEditableFileDiff(currentFileDiff) : false,
   };
