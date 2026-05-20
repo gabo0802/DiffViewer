@@ -27,13 +27,13 @@ export default function App() {
   const [theme, setTheme] = usePersistentState<ThemeMode>(THEME_KEY, readStoredTheme);
   const {
     tabs,
+    setTabs,
     activeTab,
     setActiveTab,
     currentFileDiff: currentFd,
     tabLabels,
     openFileDiff,
     closeTab,
-    reconcileTabs,
     firstChangedMergeLine,
     canEditCurrent,
   } = useDiffTabs(() => setMergeVisible(false));
@@ -72,46 +72,34 @@ export default function App() {
     setRenderedModel(nextModel);
   }, [setRenderedModel]);
 
-  const refreshWorkspaceAndTabs = useCallback(async () => {
-    const workspace = await api.getCurrentWorkspace();
-    const refreshedDiffsets = await api.refreshWorkspaceDiffsets(workspace.workspace_id);
-    const diffsetKindById = Object.fromEntries(
-      refreshedDiffsets.map((diffset) => [diffset.diffset_id, diffset.kind])
-    );
-    const openDiffsetIds = [...new Set(tabs.map((tab) => tab.diffset_id))];
-    if (openDiffsetIds.length > 0) {
-      const refreshedEntries = await Promise.all(
-        openDiffsetIds.map(async (diffsetId) => {
-          const filediffs = await api.listFilediffs(diffsetId);
-          const diffsetKind = diffsetKindById[diffsetId];
-          return [
-            diffsetId,
-            filediffs.map((filediff) => ({
-              ...filediff,
-              diffset_kind: diffsetKind,
-            })),
-          ] as const;
-        })
-      );
-      reconcileTabs(Object.fromEntries(refreshedEntries));
-    }
-
-    setSidebarRefreshToken(Date.now());
-  }, [reconcileTabs, tabs]);
-
   const handleMergeSaveComplete = useCallback(async () => {
     if (!currentFd) return;
-    await refreshWorkspaceAndTabs();
-  }, [currentFd, refreshWorkspaceAndTabs]);
+
+    const workspace = await api.getCurrentWorkspace();
+    await api.refreshWorkspaceDiffsets(workspace.workspace_id);
+    const refreshedFilediffs = await api.listFilediffs(currentFd.diffset_id);
+    const replacement =
+      refreshedFilediffs.find((fd) => fd.display_path === currentFd.display_path) ?? null;
+
+    setSidebarRefreshToken(Date.now());
+
+    if (!replacement) {
+      setTabs((prev) => prev.filter((tab) => tab.filediff_id !== currentFd.filediff_id));
+      setActiveTab(null);
+      setMergeVisible(false);
+      return;
+    }
+
+    setTabs((prev) =>
+      prev.map((tab) => (tab.filediff_id === currentFd.filediff_id ? replacement : tab))
+    );
+    setActiveTab(replacement.filediff_id);
+  }, [currentFd, setActiveTab, setTabs]);
 
   return (
     <div className="app-root">
       <div className="sidebar-shell" style={{ width: sidebarWidth }}>
-        <Sidebar
-          onSelectFileDiff={openFileDiff}
-          refreshToken={sidebarRefreshToken}
-          onRefreshWorkspace={refreshWorkspaceAndTabs}
-        />
+        <Sidebar onSelectFileDiff={openFileDiff} refreshToken={sidebarRefreshToken} />
       </div>
       <div
         className={`sidebar-resizer ${isResizingSidebar ? "sidebar-resizer-active" : ""}`}
