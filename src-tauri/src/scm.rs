@@ -5,7 +5,8 @@ use std::path::Path;
 
 use crate::content_source::{ContentSource, WriteTarget};
 use crate::debugging::DebugLogger;
-use crate::diff_engine::unified_parser::{self, PatchFileDiff};
+use crate::diff_engine::{twoway, unified_parser::{self, PatchFileDiff}};
+use crate::io;
 use crate::store::{self, DiffSet, FileDiff};
 
 mod p4_config;
@@ -53,23 +54,12 @@ pub fn import_git_working_tree(
     workspace_id: &str,
     repo_path: &str,
 ) -> Result<String, String> {
-    let output = run_command(
-        "git",
-        &[
-            "-C",
-            repo_path,
-            "diff",
-            "--no-color",
-            "--no-ext-diff",
-            "--unified=3",
-        ],
-        None,
-    )?;
+    let parsed = load_git_working_tree_file_diffs(repo_path)?;
     let title = format!("Git working tree: {}", display_repo_name(repo_path));
-    import_unified_diff_text(
+    import_parsed_diff_text(
         conn,
         workspace_id,
-        &output,
+        &parsed,
         DiffSetDescriptor {
             title,
             source_type: "Git".to_string(),
@@ -77,7 +67,7 @@ pub fn import_git_working_tree(
             kind: "gitWorkingTree".to_string(),
             source_meta: serde_json::json!({
                 "repo_path": repo_path,
-                "file_count": unified_parser::parse_unified_diff(&output).len()
+                "file_count": parsed.len()
             }),
             left_label: "HEAD".to_string(),
             right_label: "working tree".to_string(),
@@ -431,23 +421,12 @@ fn replace_git_working_tree(
     diffset: &DiffSet,
     repo_path: &str,
 ) -> Result<(), String> {
-    let output = run_command(
-        "git",
-        &[
-            "-C",
-            repo_path,
-            "diff",
-            "--no-color",
-            "--no-ext-diff",
-            "--unified=3",
-        ],
-        None,
-    )?;
+    let parsed = load_git_working_tree_file_diffs(repo_path)?;
     let title = format!("Git working tree: {}", display_repo_name(repo_path));
-    replace_diffset_contents(
+    replace_parsed_diffset_contents(
         conn,
         diffset,
-        &output,
+        &parsed,
         DiffSetDescriptor {
             title,
             source_type: "Git".to_string(),
@@ -455,7 +434,7 @@ fn replace_git_working_tree(
             kind: "gitWorkingTree".to_string(),
             source_meta: serde_json::json!({
                 "repo_path": repo_path,
-                "file_count": unified_parser::parse_unified_diff(&output).len()
+                "file_count": parsed.len()
             }),
             left_label: "HEAD".to_string(),
             right_label: "working tree".to_string(),
@@ -631,13 +610,22 @@ fn replace_diffset_contents(
     action_by_path: Option<&HashMap<String, String>>,
 ) -> Result<(), String> {
     let parsed = unified_parser::parse_unified_diff(diff_text);
+    replace_parsed_diffset_contents(conn, diffset, &parsed, descriptor, action_by_path)
+}
+
+fn replace_parsed_diffset_contents(
+    conn: &Connection,
+    diffset: &DiffSet,
+    parsed: &[PatchFileDiff],
+    descriptor: DiffSetDescriptor,
+    action_by_path: Option<&HashMap<String, String>>,
+) -> Result<(), String> {
     DebugLogger::new("scm").log(format!(
-        "replace_diffset_contents diffset_id={} provider={} kind={} parsed_files={} diff_len={}",
+        "replace_diffset_contents diffset_id={} provider={} kind={} parsed_files={}",
         diffset.diffset_id,
         descriptor.provider,
         descriptor.kind,
         parsed.len(),
-        diff_text.len()
     ));
     let DiffSetDescriptor {
         title,
@@ -665,7 +653,7 @@ fn replace_diffset_contents(
     store::update_diffset(&tx, &updated)?;
     store::delete_filediffs_for_diffset(&tx, &diffset.diffset_id)?;
 
-    for pf in &parsed {
+    for pf in parsed {
         insert_patch_file_diff(
             &tx,
             &diffset.diffset_id,
@@ -680,6 +668,105 @@ fn replace_diffset_contents(
 
     tx.commit().map_err(|err| err.to_string())?;
     Ok(())
+}
+
+fn load_git_working_tree_file_diffs(repo_path: &str) -> Result<Vec<PatchFileDiff>, String> {
+    let mut parsed = unified_parser::parse_unified_diff(&git_working_tree_diff_text(repo_path)?);
+    append_untracked_git_file_diffs(&mut parsed, repo_path)?;
+    Ok(parsed)
+}
+
+fn git_working_tree_diff_text(repo_path: &str) -> Result<String, String> {
+    if git_ref_exists(repo_path, "HEAD") {
+        run_command(
+            "git",
+            &[
+                "-C",
+                repo_path,
+                "diff",
+                "--no-color",
+                "--no-ext-diff",
+                "--unified=3",
+                "HEAD",
+            ],
+            None,
+        )
+    } else {
+        run_command(
+            "git",
+            &[
+                "-C",
+                repo_path,
+                "diff",
+                "--cached",
+                "--no-color",
+                "--no-ext-diff",
+                "--unified=3",
+            ],
+            None,
+        )
+    }
+}
+
+fn git_ref_exists(repo_path: &str, rev: &str) -> bool {
+    run_command("git", &["-C", repo_path, "rev-parse", "--verify", rev], None).is_ok()
+}
+
+fn append_untracked_git_file_diffs(
+    parsed: &mut Vec<PatchFileDiff>,
+    repo_path: &str,
+) -> Result<(), String> {
+    let existing_paths = parsed
+        .iter()
+        .map(display_path_for_patch)
+        .collect::<HashSet<_>>();
+
+    for rel_path in list_untracked_git_paths(repo_path)? {
+        if existing_paths.contains(&rel_path) {
+            continue;
+        }
+
+        let abs_path = Path::new(repo_path).join(&rel_path);
+        if !abs_path.is_file() {
+            continue;
+        }
+
+        let text = io::read_file_text(&abs_path)?;
+        parsed.push(synthetic_git_added_file_diff(&rel_path, &text));
+    }
+
+    Ok(())
+}
+
+fn list_untracked_git_paths(repo_path: &str) -> Result<Vec<String>, String> {
+    let output = run_command(
+        "git",
+        &[
+            "-C",
+            repo_path,
+            "ls-files",
+            "--others",
+            "--exclude-standard",
+            "--full-name",
+        ],
+        None,
+    )?;
+
+    Ok(output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect())
+}
+
+fn synthetic_git_added_file_diff(rel_path: &str, text: &str) -> PatchFileDiff {
+    PatchFileDiff {
+        old_path: "/dev/null".to_string(),
+        new_path: rel_path.to_string(),
+        hunks: twoway::compute_hunks("", text),
+        status: "added".to_string(),
+    }
 }
 
 fn insert_patch_file_diff(
@@ -1529,6 +1616,16 @@ mod tests {
             serde_json::from_str::<serde_json::Value>(&right_json).unwrap(),
             serde_json::json!({ "type": "path", "path": "C:\\work\\new_file.cpp" })
         );
+    }
+
+    #[test]
+    fn synthetic_git_added_file_diff_marks_file_as_added() {
+        let diff = synthetic_git_added_file_diff("src/new_file.rs", "fn main() {}\n");
+        assert_eq!(diff.old_path, "/dev/null");
+        assert_eq!(diff.new_path, "src/new_file.rs");
+        assert_eq!(diff.status, "added");
+        assert_eq!(diff.hunks.len(), 1);
+        assert!(diff.hunks[0].lines.iter().all(|line| line.kind == "add"));
     }
 
     #[test]
