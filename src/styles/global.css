@@ -758,6 +758,11 @@ html, body, #root {
   padding: 10px 12px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--tab-bg) 78%, transparent);
+  align-items: end;
+}
+
+.settings-override-row .icon-button-square {
+  align-self: end;
 }
 
 .settings-extension-pill {
