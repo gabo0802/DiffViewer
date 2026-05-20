@@ -10,7 +10,7 @@ import { CloseIcon, PlusIcon } from "./Icons";
 
 const SHORTCUTS = [
   { keys: "Ctrl + Click", action: "Select multiple diff tabs without switching focus" },
-  { keys: "Ctrl + Tab", action: "Switch to the next diff tab" },
+  { keys: "Ctrl + Tab / T", action: "Switch to the next diff tab" },
   { keys: "Ctrl + D", action: "Close the current diff tab" },
   { keys: "Ctrl + R", action: "Refresh the sidebar diff list" },
   { keys: "Ctrl + 1", action: "Jump to the previous visible change block" },
