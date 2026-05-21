@@ -19,6 +19,7 @@ interface Props {
   visible: boolean;
   onToggle: () => void;
   onSaveComplete?: () => Promise<void> | void;
+  saveCommandToken?: number;
   editorPreferences: EditorPreferences;
   theme: "dark" | "light";
   onEditorPreferencesChange: React.Dispatch<React.SetStateAction<EditorPreferences>>;
@@ -33,6 +34,7 @@ export default function MergePanel({
   visible,
   onToggle,
   onSaveComplete,
+  saveCommandToken = 0,
   editorPreferences,
   theme,
   onEditorPreferencesChange,
@@ -55,6 +57,7 @@ export default function MergePanel({
   const lastReportedTopLineRef = useRef(1);
   const lastFocusedFileRef = useRef<string | null>(null);
   const lastAppliedSyncTokenRef = useRef(0);
+  const lastHandledSaveTokenRef = useRef(0);
   const startYRef = useRef(0);
   const startHeightRef = useRef(320);
   const editorLanguage = resolveEditorLanguage(fileDiff, editorPreferences);
@@ -119,6 +122,13 @@ export default function MergePanel({
       setIsSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (!visible || saveCommandToken === 0 || isSaving) return;
+    if (lastHandledSaveTokenRef.current === saveCommandToken) return;
+    lastHandledSaveTokenRef.current = saveCommandToken;
+    handleSave();
+  }, [handleSave, isSaving, saveCommandToken, visible]);
 
   useEffect(() => {
     if (!isResizing) return;

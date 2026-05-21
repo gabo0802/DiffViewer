@@ -1,5 +1,11 @@
 use std::process::Command;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 pub fn browse_for_directory(initial_path: Option<&str>) -> Result<Option<String>, String> {
     #[cfg(target_os = "windows")]
     {
@@ -18,6 +24,7 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
 "#;
 
         let mut command = Command::new("powershell");
+        command.creation_flags(CREATE_NO_WINDOW);
         command.args(["-NoProfile", "-STA", "-Command", script]);
         if let Some(initial_path) = initial_path.filter(|value| !value.trim().is_empty()) {
             command.env("DIFFVIEWER_INITIAL_DIR", initial_path);
