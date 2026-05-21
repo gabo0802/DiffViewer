@@ -16,6 +16,7 @@ const SHORTCUTS = [
   { keys: "Ctrl + 1", action: "Jump to the previous visible change block" },
   { keys: "Ctrl + 2", action: "Jump to the next visible change block" },
   { keys: "Ctrl + E", action: "Toggle the merge editor for the active diff" },
+  { keys: "Ctrl + S", action: "Save merged output while merge mode is open" },
 ];
 
 interface Props {

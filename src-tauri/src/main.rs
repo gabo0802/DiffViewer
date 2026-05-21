@@ -49,6 +49,7 @@ fn main() {
             commands::diff::list_diffsets,
             commands::diff::list_filediffs,
             commands::diff::refresh_workspace_diffsets,
+            commands::diff::refresh_diffset,
             commands::diff::delete_diffset,
             commands::diff::get_rendered_diff,
             commands::diff::mark_reviewed,

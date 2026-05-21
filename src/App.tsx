@@ -21,6 +21,7 @@ const THEME_KEY = "diffviewer.theme";
 
 export default function App() {
   const [mergeVisible, setMergeVisible] = useState(false);
+  const [mergeSaveCommandToken, setMergeSaveCommandToken] = useState(0);
   const [sidebarRefreshToken, setSidebarRefreshToken] = useState(0);
   const [sidebarRefreshCommandToken, setSidebarRefreshCommandToken] = useState(0);
   const [activeWorkspaceView, setActiveWorkspaceView] = useState<"diff" | "settings">("diff");
@@ -108,8 +109,7 @@ export default function App() {
   const handleMergeSaveComplete = useCallback(async () => {
     if (!currentFd) return;
 
-    const workspace = await api.getCurrentWorkspace();
-    await api.refreshWorkspaceDiffsets(workspace.workspace_id);
+    await api.refreshDiffset(currentFd.diffset_id);
     const refreshedFilediffs = await api.listFilediffs(currentFd.diffset_id);
     const replacement =
       refreshedFilediffs.find((fd) => fd.display_path === currentFd.display_path) ?? null;
@@ -135,7 +135,8 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!event.ctrlKey) return;
+      const hasModifier = event.ctrlKey || event.metaKey;
+      if (!hasModifier) return;
       const target = event.target as HTMLElement | null;
       const tagName = target?.tagName?.toLowerCase();
       const insideMonaco = Boolean(target?.closest?.(".monaco-editor"));
@@ -179,6 +180,14 @@ export default function App() {
         setActiveWorkspaceView("diff");
         setSelectedTabIds([]);
         setMergeVisible((current) => !current);
+        return;
+      }
+
+      if (key === "s") {
+        if (!currentFd || !canEditCurrent || !mergeVisible || event.repeat) return;
+        event.preventDefault();
+        setActiveWorkspaceView("diff");
+        setMergeSaveCommandToken((current) => current + 1);
         return;
       }
 
@@ -343,6 +352,7 @@ export default function App() {
               visible={mergeVisible}
               onToggle={() => setMergeVisible(false)}
               onSaveComplete={handleMergeSaveComplete}
+              saveCommandToken={mergeSaveCommandToken}
               editorPreferences={editorPreferences}
               theme={theme}
               onEditorPreferencesChange={setEditorPreferences}

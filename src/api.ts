@@ -91,6 +91,9 @@ export const listFilediffs = (diffsetId: string) =>
 export const refreshWorkspaceDiffsets = (workspaceId: string) =>
   invoke<DiffSet[]>("refresh_workspace_diffsets", { workspaceId });
 
+export const refreshDiffset = (diffsetId: string) =>
+  invoke<boolean>("refresh_diffset", { diffsetId });
+
 export const deleteDiffset = (diffsetId: string) =>
   invoke<void>("delete_diffset", { diffsetId });
 

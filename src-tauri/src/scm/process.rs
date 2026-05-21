@@ -1,8 +1,14 @@
 use std::process::Command;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 use crate::debugging::DebugLogger;
 
 use super::p4_config::{apply_p4_config_env, P4Config};
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 pub(super) fn run_command(
     program: &str,
@@ -51,6 +57,8 @@ fn run_command_owned(
     }
 
     let mut cmd = Command::new(program);
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
     cmd.args(args);
     if let Some(cwd) = cwd.filter(|value| !value.trim().is_empty()) {
         cmd.current_dir(cwd);

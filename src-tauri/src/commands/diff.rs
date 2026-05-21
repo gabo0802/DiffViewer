@@ -124,6 +124,12 @@ pub fn refresh_workspace_diffsets(
 }
 
 #[tauri::command]
+pub fn refresh_diffset(state: State<AppState>, diffset_id: String) -> Result<bool, String> {
+    let conn = state.db.lock().map_err(|err| err.to_string())?;
+    scm::refresh_diffset(&conn, &diffset_id)
+}
+
+#[tauri::command]
 pub fn delete_diffset(state: State<AppState>, diffset_id: String) -> Result<(), String> {
     let conn = state.db.lock().map_err(|err| err.to_string())?;
     store::delete_diffset(&conn, &diffset_id)
