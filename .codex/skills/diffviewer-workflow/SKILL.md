@@ -118,3 +118,11 @@ Use the existing repo patterns rather than inventing new ones.
   - P4
   - patch
   - external
+
+## Release Version Bump Checklist
+
+When cutting a release, keep all version fields in sync:
+
+- `src-tauri/tauri.conf.json` -> `version`
+- `src-tauri/Cargo.toml` -> `[package].version`
+- `package.json` -> `version`
