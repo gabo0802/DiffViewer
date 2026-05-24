@@ -45,7 +45,37 @@ if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
         }
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    {
+        let mut script = String::from("POSIX path of (choose folder");
+        if let Some(initial_path) = initial_path.filter(|value| !value.trim().is_empty()) {
+            let safe_path = initial_path.replace("\"", "\\\"");
+            script.push_str(&format!(" default location POSIX file \"{}\"", safe_path));
+        }
+        script.push_str(")");
+
+        let output = Command::new("osascript")
+            .args(["-e", &script])
+            .output()
+            .map_err(|err| format!("Failed to open folder picker: {}", err))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if stderr.contains("User canceled") {
+                return Ok(None);
+            }
+            return Err(stderr.trim().to_string());
+        }
+
+        let selected = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if selected.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(selected))
+        }
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         let _ = initial_path;
         Err("Directory picker is not implemented for this platform yet".to_string())
