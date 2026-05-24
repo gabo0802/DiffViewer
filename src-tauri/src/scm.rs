@@ -133,12 +133,13 @@ pub fn import_git_commit(
         .map(str::trim)
         .filter(|line| !line.is_empty())
         .unwrap_or(rev);
+    let rev_prefix: String = rev.chars().take(5).collect();
     import_unified_diff_text(
         conn,
         workspace_id,
         &output,
         DiffSetDescriptor {
-            title: format!("{} {}", short_rev(rev), subject),
+            title: format!("{} - '{}'", rev_prefix, subject),
             source_type: "Git".to_string(),
             provider: "git".to_string(),
             kind: "gitCommit".to_string(),
@@ -381,9 +382,11 @@ pub fn import_p4_pending(
     populate_p4_local_paths(&mut opened_files, cwd, &p4_config)?;
     let diff = collect_pending_p4_diff(&opened_files, cwd, &p4_config)?;
     let title = if change == "default" {
-        "P4 default pending changelist".to_string()
+        "default - 'Default pending changelist'".to_string()
     } else {
-        format!("P4 pending changelist {}", change)
+        let desc = get_p4_pending_change_description(change, cwd, &p4_config)
+            .unwrap_or_else(|| "Pending changelist".to_string());
+        format!("{} - '{}'", change, desc)
     };
     let action_map = opened_files
         .iter()
@@ -453,7 +456,7 @@ pub fn import_p4_shelved(
         &output,
         "p4Shelved",
         "Shelved",
-        &format!("P4 shelved changelist {}", change),
+        "Shelved changelist",
         "depot previous/have",
         &format!("shelf @={}", change),
         &described_files,
@@ -489,7 +492,7 @@ pub fn import_p4_submitted(
         &output,
         "p4Submitted",
         "Submitted",
-        &format!("P4 submitted changelist {}", change),
+        "Submitted changelist",
         "#rev-1",
         &format!("#rev @{}", change),
         &described_files,
@@ -511,9 +514,11 @@ fn import_p4_describe(
 ) -> Result<String, String> {
     let desc = first_p4_description_line(output);
     let p4_config = load_p4_config(cwd);
-    let title = desc
-        .map(|line| format!("{}: {}", fallback_title, line))
-        .unwrap_or_else(|| fallback_title.to_string());
+    let title = if let Some(line) = desc {
+        format!("{} - '{}'", change, line)
+    } else {
+        format!("{} - '{}'", change, fallback_title)
+    };
     let parsed = normalize_p4_describe_files(
         unified_parser::parse_unified_diff(output),
         described_files,
@@ -599,9 +604,11 @@ fn replace_p4_pending(
     populate_p4_local_paths(&mut opened_files, cwd, &p4_config)?;
     let diff = collect_pending_p4_diff(&opened_files, cwd, &p4_config)?;
     let title = if change == "default" {
-        "P4 default pending changelist".to_string()
+        "default - 'Default pending changelist'".to_string()
     } else {
-        format!("P4 pending changelist {}", change)
+        let desc = get_p4_pending_change_description(change, cwd, &p4_config)
+            .unwrap_or_else(|| "Pending changelist".to_string());
+        format!("{} - '{}'", change, desc)
     };
     let action_map = opened_files
         .iter()
@@ -1489,13 +1496,18 @@ fn first_p4_description_line(output: &str) -> Option<String> {
             if trimmed.is_empty() {
                 continue;
             }
-            if trimmed == "Affected files ..." {
+            if trimmed == "Affected files ..." || trimmed == "Files:" {
                 return None;
             }
             return Some(trimmed.to_string());
         }
     }
     None
+}
+
+fn get_p4_pending_change_description(change: &str, cwd: Option<&str>, p4_config: &P4Config) -> Option<String> {
+    let output = run_p4(&["change", "-o", change], cwd, p4_config).ok()?;
+    first_p4_description_line(&output)
 }
 
 fn parse_p4_pending_change_line(raw_line: &str) -> Option<P4PendingChangeSummary> {
