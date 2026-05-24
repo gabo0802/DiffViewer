@@ -7,6 +7,7 @@ import {
   type EditorPreferences,
 } from "../editorPreferences";
 import { CloseIcon, PlusIcon } from "./Icons";
+import * as api from "../api";
 
 const isMac = navigator.userAgent.toLowerCase().includes("mac");
 const modKey = isMac ? "⌘" : "Ctrl";
@@ -54,6 +55,32 @@ export default function SettingsPanel({
   const [overrideRows, setOverrideRows] = useState(() =>
     rowsFromOverrides(editorPreferences.extensionLanguageOverrides),
   );
+
+  const [githubPat, setGithubPat] = useState("");
+  const [gitlabPat, setGitlabPat] = useState("");
+  const [gitlabHostUrl, setGitlabHostUrl] = useState("");
+  const [isSavingScm, setIsSavingScm] = useState(false);
+
+  React.useEffect(() => {
+    api.getCurrentWorkspaceSettings().then((settings) => {
+      setGithubPat(settings.githubPat || "");
+      setGitlabPat(settings.gitlabPat || "");
+      setGitlabHostUrl(settings.gitlabHostUrl || "");
+    });
+  }, []);
+
+  const saveScmSettings = async () => {
+    setIsSavingScm(true);
+    try {
+      await api.updateScmSettings(
+        githubPat || undefined,
+        gitlabPat || undefined,
+        gitlabHostUrl || undefined
+      );
+    } finally {
+      setIsSavingScm(false);
+    }
+  };
 
   const syntaxLanguages = useMemo(
     () => LANGUAGE_OPTIONS.filter((option) => option.value !== "auto"),
@@ -127,6 +154,46 @@ export default function SettingsPanel({
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="settings-section">
+        <div className="settings-section-header">
+          <h3>Integrations</h3>
+          <span className="settings-section-helper">For Pull/Merge Requests</span>
+        </div>
+        <div className="settings-override-list">
+          <label className="settings-field">
+            <span>GitHub PAT</span>
+            <input
+              type="password"
+              placeholder="ghp_..."
+              value={githubPat}
+              onChange={(e) => setGithubPat(e.target.value)}
+              onBlur={saveScmSettings}
+            />
+          </label>
+          <label className="settings-field">
+            <span>GitLab PAT</span>
+            <input
+              type="password"
+              placeholder="glpat-..."
+              value={gitlabPat}
+              onChange={(e) => setGitlabPat(e.target.value)}
+              onBlur={saveScmSettings}
+            />
+          </label>
+          <label className="settings-field">
+            <span>GitLab Host URL</span>
+            <input
+              type="text"
+              placeholder="https://gitlab.com"
+              value={gitlabHostUrl}
+              onChange={(e) => setGitlabHostUrl(e.target.value)}
+              onBlur={saveScmSettings}
+            />
+          </label>
+        </div>
+        {isSavingScm && <div className="settings-helper-block">Saving...</div>}
       </section>
 
       <section className="settings-section">

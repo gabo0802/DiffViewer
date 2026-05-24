@@ -10,6 +10,9 @@ pub struct WorkspaceSettings {
     pub saved_p4_directories: Vec<SavedWorkspaceLocation>,
     pub selected_git_directory_id: Option<String>,
     pub selected_p4_directory_id: Option<String>,
+    pub github_pat: Option<String>,
+    pub gitlab_pat: Option<String>,
+    pub gitlab_host_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -136,6 +139,21 @@ pub fn remove_location(
         .filter(|current| *current != trimmed_id)
         .map(str::to_string);
     set_selected_id(&mut settings, provider, selected_id);
+    persist_settings(conn, workspace_id, &settings)?;
+    Ok(settings)
+}
+
+pub fn update_scm_settings(
+    conn: &Connection,
+    workspace_id: &str,
+    github_pat: Option<String>,
+    gitlab_pat: Option<String>,
+    gitlab_host_url: Option<String>,
+) -> Result<WorkspaceSettings, String> {
+    let mut settings = get_settings(conn, workspace_id)?;
+    settings.github_pat = github_pat;
+    settings.gitlab_pat = gitlab_pat;
+    settings.gitlab_host_url = gitlab_host_url;
     persist_settings(conn, workspace_id, &settings)?;
     Ok(settings)
 }

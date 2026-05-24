@@ -4,6 +4,7 @@ import type {
   WorkspaceSettings,
   P4PendingChangeSummary,
   GitCommitSummary,
+  PullRequestSummary,
   DiffSet,
   FileDiff,
   RenderedDiffModel,
@@ -48,6 +49,17 @@ export const removeCurrentWorkspaceLocation = (
     locationId,
   });
 
+export const updateScmSettings = (
+  githubPat?: string,
+  gitlabPat?: string,
+  gitlabHostUrl?: string
+) =>
+  invoke<WorkspaceSettings>("update_scm_settings", {
+    githubPat,
+    gitlabPat,
+    gitlabHostUrl,
+  });
+
 export const browseForDirectory = (initialPath?: string) =>
   invoke<string | null>("browse_for_directory", { initialPath });
 
@@ -74,8 +86,17 @@ export const importP4Shelved = (change: string, cwd?: string) =>
 export const importP4Submitted = (change: string, cwd?: string) =>
   invoke<string>("import_p4_submitted", { change, cwd });
 
-export const listGitCommits = (repoPath: string, limit = 30) =>
-  invoke<GitCommitSummary[]>("list_git_commits", { repoPath, limit });
+export const listGitCommits = (repoPath: string, limit = 30, branch: string | null = null) =>
+  invoke<GitCommitSummary[]>("list_git_commits", { repoPath, limit, branch });
+
+export const listGitBranches = (repoPath: string) =>
+  invoke<string[]>("list_git_branches", { repoPath });
+
+export const getPullRequests = (repoPath: string) =>
+  invoke<PullRequestSummary[]>("get_pull_requests", { repoPath });
+
+export const importGitPullRequest = (repoPath: string, prId: string, targetBranch: string, prTitle?: string) =>
+  invoke<string>("import_git_pull_request", { repoPath, prId, targetBranch, prTitle });
 
 export const listP4PendingChanges = (cwd?: string) =>
   invoke<P4PendingChangeSummary[]>("list_p4_pending_changes", { cwd });

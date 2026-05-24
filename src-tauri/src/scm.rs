@@ -11,6 +11,7 @@ use crate::store::{self, DiffSet, FileDiff};
 
 mod p4_config;
 mod process;
+pub mod pr_api;
 
 use p4_config::{load_p4_config, P4Config};
 use process::{run_command, run_p4, run_p4_owned};
@@ -157,20 +158,21 @@ pub fn import_git_commit(
     )
 }
 
-pub fn list_git_commits(repo_path: &str, limit: usize) -> Result<Vec<GitCommitSummary>, String> {
+pub fn list_git_commits(repo_path: &str, limit: usize, branch: Option<&str>) -> Result<Vec<GitCommitSummary>, String> {
     let max_count = limit.max(1).min(100).to_string();
-    let output = run_command(
-        "git",
-        &[
-            "-C",
-            repo_path,
-            "log",
-            "--max-count",
-            &max_count,
-            "--pretty=format:%H%x1f%h%x1f%s%x1f%cr",
-        ],
-        None,
-    )?;
+    let mut args = vec![
+        "-C",
+        repo_path,
+        "log",
+        "--max-count",
+        &max_count,
+        "--pretty=format:%H%x1f%h%x1f%s%x1f%cr",
+    ];
+    if let Some(b) = branch {
+        args.push(b);
+    }
+
+    let output = run_command("git", &args, None)?;
 
     Ok(output
         .lines()
@@ -191,6 +193,134 @@ pub fn list_git_commits(repo_path: &str, limit: usize) -> Result<Vec<GitCommitSu
             })
         })
         .collect())
+}
+
+pub fn list_git_branches(repo_path: &str) -> Result<Vec<String>, String> {
+    let output = run_command(
+        "git",
+        &[
+            "-C",
+            repo_path,
+            "for-each-ref",
+            "--format=%(refname:short)",
+            "refs/heads/",
+            "refs/remotes/",
+        ],
+        None,
+    )?;
+
+    let mut branches: Vec<String> = output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect();
+    
+    branches.sort();
+    branches.dedup();
+    Ok(branches)
+}
+
+pub fn get_pull_requests(
+    conn: &Connection,
+    workspace_id: &str,
+    repo_path: &str,
+) -> Result<Vec<pr_api::PullRequestSummary>, String> {
+    let remote_url = run_command(
+        "git",
+        &["-C", repo_path, "remote", "get-url", "origin"],
+        None,
+    ).map(|s| s.trim().to_string())?;
+
+    let settings = crate::services::workspace_service::get_settings(conn, workspace_id)?;
+    let repo_info = pr_api::parse_remote_url(&remote_url, settings.gitlab_host_url.as_deref())
+        .ok_or_else(|| "Could not parse origin remote URL as GitHub or GitLab".to_string())?;
+
+    pr_api::get_pull_requests(&repo_info, settings.github_pat.as_deref(), settings.gitlab_pat.as_deref())
+}
+
+pub fn import_git_pull_request(
+    conn: &Connection,
+    workspace_id: &str,
+    repo_path: &str,
+    pr_id: &str,
+    target_branch: &str,
+    pr_title: Option<&str>,
+) -> Result<String, String> {
+    // 1. Determine host
+    let remote_url = run_command(
+        "git",
+        &["-C", repo_path, "remote", "get-url", "origin"],
+        None,
+    ).map(|s| s.trim().to_string())?;
+    
+    let settings = crate::services::workspace_service::get_settings(conn, workspace_id)?;
+    let repo_info = pr_api::parse_remote_url(&remote_url, settings.gitlab_host_url.as_deref())
+        .ok_or_else(|| "Could not parse origin remote URL".to_string())?;
+
+    // 2. Fetch the PR/MR ref
+    let fetch_ref = match repo_info.host {
+        pr_api::RepoHost::GitHub => format!("pull/{}/head", pr_id),
+        pr_api::RepoHost::GitLab(_) => format!("merge-requests/{}/head", pr_id),
+    };
+    
+    run_command(
+        "git",
+        &["-C", repo_path, "fetch", "origin", &fetch_ref],
+        None,
+    )?;
+
+    // 3. Compute the diff using git diff target_branch...FETCH_HEAD
+    let output = run_command(
+        "git",
+        &[
+            "-C",
+            repo_path,
+            "diff",
+            "--no-color",
+            "--no-ext-diff",
+            "--unified=3",
+            &format!("{}...FETCH_HEAD", target_branch),
+        ],
+        None,
+    )?;
+
+    let (title_prefix, pr_type) = match repo_info.host {
+        pr_api::RepoHost::GitHub => ("PR", "PR"),
+        pr_api::RepoHost::GitLab(_) => ("MR", "MR"),
+    };
+    
+    let title = if let Some(t) = pr_title {
+        format!("{} #{}: {}", title_prefix, pr_id, t)
+    } else {
+        format!("{} #{}", title_prefix, pr_id)
+    };
+    
+    import_unified_diff_text(
+        conn,
+        workspace_id,
+        &output,
+        DiffSetDescriptor {
+            title: title.clone(),
+            source_type: "Git".to_string(),
+            provider: "git".to_string(),
+            kind: "gitPullRequest".to_string(),
+            source_meta: serde_json::json!({
+                "repo_path": repo_path,
+                "pr_id": pr_id,
+                "target_branch": target_branch,
+                "pr_type": pr_type,
+                "file_count": unified_parser::parse_unified_diff(&output).len()
+            }),
+            left_label: target_branch.to_string(),
+            right_label: format!("PR #{}", pr_id),
+            write_target_mode: WriteTargetMode::GitCommit {
+                repo_path: repo_path.to_string(),
+                rev: "FETCH_HEAD".to_string(),
+            },
+        },
+        None,
+    )
 }
 
 pub fn list_p4_pending_changes(cwd: Option<&str>) -> Result<Vec<P4PendingChangeSummary>, String> {
