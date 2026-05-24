@@ -81,8 +81,37 @@ pub fn import_p4_submitted(
 pub fn list_git_commits(
     repo_path: String,
     limit: Option<usize>,
+    branch: Option<String>,
 ) -> Result<Vec<scm::GitCommitSummary>, String> {
-    scm::list_git_commits(&repo_path, limit.unwrap_or(30))
+    scm::list_git_commits(&repo_path, limit.unwrap_or(30), branch.as_deref())
+}
+
+#[tauri::command]
+pub fn list_git_branches(repo_path: String) -> Result<Vec<String>, String> {
+    scm::list_git_branches(&repo_path)
+}
+
+#[tauri::command]
+pub fn get_pull_requests(
+    state: State<AppState>,
+    repo_path: String,
+) -> Result<Vec<scm::pr_api::PullRequestSummary>, String> {
+    let conn = state.db.lock().map_err(|err| err.to_string())?;
+    let workspace_id = state.current_workspace_id()?;
+    scm::get_pull_requests(&conn, &workspace_id, &repo_path)
+}
+
+#[tauri::command]
+pub fn import_git_pull_request(
+    state: State<AppState>,
+    repo_path: String,
+    pr_id: String,
+    target_branch: String,
+    pr_title: Option<String>,
+) -> Result<String, String> {
+    let conn = state.db.lock().map_err(|err| err.to_string())?;
+    let workspace_id = state.current_workspace_id()?;
+    scm::import_git_pull_request(&conn, &workspace_id, &repo_path, &pr_id, &target_branch, pr_title.as_deref())
 }
 
 #[tauri::command]
