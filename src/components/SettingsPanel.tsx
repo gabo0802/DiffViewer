@@ -8,20 +8,37 @@ import {
 } from "../editorPreferences";
 import { CloseIcon, PlusIcon } from "./Icons";
 
+const isMac = navigator.userAgent.toLowerCase().includes("mac");
+const modKey = isMac ? "⌘" : "Ctrl";
+
 const SHORTCUTS = [
-  { keys: "Ctrl + Click", action: "Select multiple diff tabs without switching focus" },
-  { keys: "Ctrl + Tab / T", action: "Switch to the next diff tab" },
-  { keys: "Ctrl + D", action: "Close the current diff tab" },
-  { keys: "Ctrl + R", action: "Refresh the sidebar diff list" },
-  { keys: "Ctrl + 1", action: "Jump to the previous visible change block" },
-  { keys: "Ctrl + 2", action: "Jump to the next visible change block" },
-  { keys: "Ctrl + E", action: "Toggle the merge editor for the active diff" },
-  { keys: "Ctrl + S", action: "Save merged output while merge mode is open" },
+  {
+    keys: `${modKey} + Click`,
+    action: "Select multiple diff tabs without switching focus",
+  },
+  { keys: `${modKey} + Tab / T`, action: "Switch to the next diff tab" },
+  { keys: `${modKey} + D`, action: "Close the current diff tab" },
+  { keys: `${modKey} + R`, action: "Refresh the sidebar diff list" },
+  {
+    keys: `${modKey} + 1`,
+    action: "Jump to the previous visible change block",
+  },
+  { keys: `${modKey} + 2`, action: "Jump to the next visible change block" },
+  {
+    keys: `${modKey} + E`,
+    action: "Toggle the merge editor for the active diff",
+  },
+  {
+    keys: `${modKey} + S`,
+    action: "Save merged output while merge mode is open",
+  },
 ];
 
 interface Props {
   editorPreferences: EditorPreferences;
-  onEditorPreferencesChange: React.Dispatch<React.SetStateAction<EditorPreferences>>;
+  onEditorPreferencesChange: React.Dispatch<
+    React.SetStateAction<EditorPreferences>
+  >;
 }
 
 type SyntaxOverrideRow = {
@@ -35,12 +52,12 @@ export default function SettingsPanel({
   onEditorPreferencesChange,
 }: Props) {
   const [overrideRows, setOverrideRows] = useState(() =>
-    rowsFromOverrides(editorPreferences.extensionLanguageOverrides)
+    rowsFromOverrides(editorPreferences.extensionLanguageOverrides),
   );
 
   const syntaxLanguages = useMemo(
     () => LANGUAGE_OPTIONS.filter((option) => option.value !== "auto"),
-    []
+    [],
   );
 
   const syncOverrides = (nextRows: SyntaxOverrideRow[]) => {
@@ -65,7 +82,7 @@ export default function SettingsPanel({
   const updateOverrideRow = (
     rowId: string,
     field: keyof Omit<SyntaxOverrideRow, "id">,
-    value: string
+    value: string,
   ) => {
     syncOverrides(
       overrideRows.map((row) =>
@@ -74,8 +91,8 @@ export default function SettingsPanel({
               ...row,
               [field]: value,
             }
-          : row
-      )
+          : row,
+      ),
     );
   };
 
@@ -89,8 +106,8 @@ export default function SettingsPanel({
         <div>
           <h2 className="settings-title">Settings</h2>
           <p className="settings-description">
-            Keyboard shortcuts are fixed for now. Syntax overrides apply when the editor language
-            is set to auto detect.
+            Keyboard shortcuts are fixed for now. Syntax overrides apply when
+            the editor language is set to auto detect.
           </p>
         </div>
       </div>
@@ -104,7 +121,9 @@ export default function SettingsPanel({
           {SHORTCUTS.map((shortcut) => (
             <div key={shortcut.keys} className="settings-shortcut-row">
               <span className="settings-shortcut-keys">{shortcut.keys}</span>
-              <span className="settings-shortcut-action">{shortcut.action}</span>
+              <span className="settings-shortcut-action">
+                {shortcut.action}
+              </span>
             </div>
           ))}
         </div>
@@ -113,13 +132,16 @@ export default function SettingsPanel({
       <section className="settings-section">
         <div className="settings-section-header">
           <h3>Custom Syntax Highlighting</h3>
-          <span className="settings-section-helper">Pre-set Monaco languages</span>
+          <span className="settings-section-helper">
+            Pre-set Monaco languages
+          </span>
         </div>
 
         {overrideRows.length === 0 ? (
           <div className="settings-empty">
-            No custom file-format mappings yet. Use the plus button to add an extension like
-            `log`, `tmpl`, or `shader` and assign one of the built-in syntax highlighters.
+            No custom file-format mappings yet. Use the plus button to add an
+            extension like `log`, `tmpl`, or `shader` and assign one of the
+            built-in syntax highlighters.
           </div>
         ) : (
           <div className="settings-override-list">
@@ -131,7 +153,9 @@ export default function SettingsPanel({
                     type="text"
                     list="diffviewer-file-formats"
                     value={row.extension}
-                    onChange={(event) => updateOverrideRow(row.id, "extension", event.target.value)}
+                    onChange={(event) =>
+                      updateOverrideRow(row.id, "extension", event.target.value)
+                    }
                     placeholder="log"
                   />
                 </label>
@@ -139,7 +163,9 @@ export default function SettingsPanel({
                   <span>Syntax highlighter</span>
                   <select
                     value={row.language}
-                    onChange={(event) => updateOverrideRow(row.id, "language", event.target.value)}
+                    onChange={(event) =>
+                      updateOverrideRow(row.id, "language", event.target.value)
+                    }
                   >
                     {syntaxLanguages.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -180,14 +206,14 @@ export default function SettingsPanel({
 
         {overrideRows.length > 0 && (
           <div className="settings-helper-block">
-            Empty file-format rows are ignored until you type an extension. If two rows use the
-            same extension, the last one in the list wins.
+            Empty file-format rows are ignored until you type an extension. If
+            two rows use the same extension, the last one in the list wins.
           </div>
         )}
 
         <div className="settings-helper-block">
-          Stretch goal: custom tokenizer uploads are not wired yet, but this tab now gives us a
-          stable place to add them later.
+          Stretch goal: custom tokenizer uploads are not wired yet, but this tab
+          now gives us a stable place to add them later.
         </div>
       </section>
     </div>
@@ -212,7 +238,7 @@ function rowsToOverrides(rows: SyntaxOverrideRow[]) {
         return [];
       }
       return [[extension, row.language]];
-    })
+    }),
   );
 }
 
