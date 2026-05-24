@@ -6,7 +6,7 @@ DiffViewer is a Tauri + React desktop diff tool for Git, Perforce, patch files, 
 
 ```bash
 npm install
-npm.cmd run build
+npm run build
 cd src-tauri
 cargo test
 ```

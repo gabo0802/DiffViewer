@@ -13,8 +13,8 @@ Use the existing repo patterns rather than inventing new ones.
 2. Keep edits scoped to the feature or bug at hand.
 3. Verify with:
    - `cargo test` in `src-tauri`
-   - `npm.cmd run typecheck` in the repo root
-   - `npm.cmd run build` in the repo root
+   - `npm run typecheck` in the repo root (use `npm.cmd` on Windows CMD)
+   - `npm run build` in the repo root
 4. If you run a formatter or lint-like repo-wide command such as `cargo fmt`, say so explicitly in updates and in the final summary.
 5. Prefer formatting only touched Rust files when practical, because `cargo fmt` can rewrite unrelated files in the worktree.
 6. If formatting changes spill into unrelated files, do not stage or commit them silently; call them out explicitly.
@@ -22,8 +22,8 @@ Use the existing repo patterns rather than inventing new ones.
 
 ## Runtime Rules
 
-- Use `npm.cmd run tauri:dev` when the task depends on Tauri commands, local filesystem access through the desktop app, or Perforce/Git import actions.
-- Use `npm.cmd run dev` only for browser-only UI iteration. The plain Vite page does not provide the Tauri bridge, so `invoke`-based actions will fail there.
+- Use `npm run tauri:dev` (or `npm.cmd run tauri:dev` on Windows CMD) when the task depends on Tauri commands, local filesystem access through the desktop app, or Perforce/Git import actions.
+- Use `npm run dev` only for browser-only UI iteration. The plain Vite page does not provide the Tauri bridge, so `invoke`-based actions will fail there.
 - If a user reports `window.__TAURI_INTERNALS__ is undefined`, assume they are in the browser runtime instead of the Tauri desktop runtime.
 
 ## Perforce Rules
@@ -53,7 +53,7 @@ Use the existing repo patterns rather than inventing new ones.
 ## P4 Debugging
 
 - Base Debugging lives in `src-tauri/src/debugging.rs`.
-  - Enable it by passing `--debug` when running the app. `npm.cmd run tauri:dev -- -- -- --debug`
+  - Enable it by passing `--debug` when running the app. `npm run tauri:dev -- -- -- --debug` (or `npm.cmd` on Windows CMD)
 - Perforce logging lives in `src-tauri/src/scm.rs`.
 - Look for `[diffviewer-debug][scm]` and `[diffviewer-debug][merge]` lines in the Tauri dev console when debugging backend diff state.
 - When debugging P4 failures, inspect:
