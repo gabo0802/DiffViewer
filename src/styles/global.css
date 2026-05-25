@@ -389,8 +389,10 @@ html, body, #root {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--diff-title-lines, 3);
+  word-break: break-word;
 }
 .diffset-title small {
   display: block;

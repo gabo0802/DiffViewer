@@ -220,7 +220,10 @@ export default function App() {
   ]);
 
   return (
-    <div className="app-root">
+    <div
+      className="app-root"
+      style={{ "--diff-title-lines": editorPreferences.diffTitleLines } as React.CSSProperties}
+    >
       <div className="sidebar-shell" style={{ width: sidebarWidth }}>
         <Sidebar
           onSelectFileDiff={handleSelectFileDiff}

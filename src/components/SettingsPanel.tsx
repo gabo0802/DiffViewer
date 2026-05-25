@@ -115,9 +115,9 @@ export default function SettingsPanel({
       overrideRows.map((row) =>
         row.id === rowId
           ? {
-              ...row,
-              [field]: value,
-            }
+            ...row,
+            [field]: value,
+          }
           : row,
       ),
     );
@@ -141,6 +141,30 @@ export default function SettingsPanel({
 
       <section className="settings-section">
         <div className="settings-section-header">
+          <h3>Display</h3>
+          <span className="settings-section-helper">General Display</span>
+        </div>
+        <div className="settings-override-list">
+          <label className="settings-field">
+            <span>Diff Title Wrapping (Lines)</span>
+            <input
+              type="number"
+              min="1"
+              max="5"
+              value={editorPreferences.diffTitleLines}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (!isNaN(val)) {
+                  onEditorPreferencesChange(curr => ({ ...curr, diffTitleLines: val }));
+                }
+              }}
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <div className="settings-section-header">
           <h3>Shortcuts</h3>
           <span className="settings-section-helper">Display only</span>
         </div>
@@ -159,7 +183,7 @@ export default function SettingsPanel({
       <section className="settings-section">
         <div className="settings-section-header">
           <h3>Integrations</h3>
-          <span className="settings-section-helper">For Pull/Merge Requests</span>
+          <span className="settings-section-helper">For Private Repo Pull/Merge Requests</span>
         </div>
         <div className="settings-override-list">
           <label className="settings-field">
