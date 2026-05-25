@@ -1,0 +1,95 @@
+/* Tab bar */
+
+.tab-bar {
+  display: flex;
+  align-items: center;
+  background: var(--tab-bg);
+  border-bottom: 1px solid var(--border);
+  height: 36px;
+  overflow-x: auto;
+  flex: 0 0 auto;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  height: 100%;
+  min-width: 0;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 12px;
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
+}
+.tab-button {
+  background: none;
+  border: none;
+  font: inherit;
+}
+.tab:hover { color: var(--text); }
+.tab-active { background: var(--tab-active); color: var(--text); border-bottom: 2px solid var(--accent); }
+.tab-selected {
+  background: color-mix(in srgb, var(--accent) 12%, var(--tab-bg));
+  color: var(--text);
+}
+
+.tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-close {
+  background: none;
+  border: 1px solid transparent;
+  min-width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+.tab-close:hover {
+  color: var(--text);
+  border-color: var(--border);
+  background: var(--hover-bg);
+}
+
+.tab-close svg {
+  width: 12px;
+  height: 12px;
+}
+
+.tab svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.toolbar-actions {
+  margin-left: auto;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.btn-merge-toggle {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.btn-merge-toggle:hover { filter: brightness(1.2); }

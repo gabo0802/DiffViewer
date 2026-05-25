@@ -7,6 +7,7 @@ mod debugging;
 mod diff_engine;
 mod io;
 mod open_request;
+mod providers;
 mod scm;
 mod services;
 mod store;
