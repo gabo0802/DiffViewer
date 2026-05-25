@@ -11,6 +11,7 @@ import type {
 import AddDiffDialog, { type AddDiffRequest } from "./AddDiffDialog";
 import FormDialog from "./FormDialog";
 import { CloseIcon, LoadingIcon, PlusIcon, SettingsIcon } from "./Icons";
+import "./Sidebar.css";
 
 interface Props {
   onSelectFileDiff: (fd: FileDiff) => void;

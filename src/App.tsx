@@ -14,6 +14,8 @@ import { useDiffTabs } from "./hooks/useDiffTabs";
 import { usePersistentState } from "./hooks/usePersistentState";
 import { useResizablePane } from "./hooks/useResizablePane";
 import type { FileDiff, RenderedDiffModel } from "./types";
+import "./components/Workspace.css";
+import "./components/Tabs.css";
 
 const SIDEBAR_WIDTH_KEY = "diffviewer.sidebarWidth";
 const EDITOR_PREFERENCES_KEY = "diffviewer.editorPreferences";

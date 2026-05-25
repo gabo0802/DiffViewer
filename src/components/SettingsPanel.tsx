@@ -8,6 +8,7 @@ import {
 } from "../editorPreferences";
 import { CloseIcon, PlusIcon } from "./Icons";
 import * as api from "../api";
+import "./SettingsPanel.css";
 
 const isMac = navigator.userAgent.toLowerCase().includes("mac");
 const modKey = isMac ? "⌘" : "Ctrl";
