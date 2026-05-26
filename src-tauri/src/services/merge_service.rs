@@ -4,7 +4,7 @@ use std::path::Path;
 use crate::content_source::{ContentSource, WriteTarget};
 use crate::debugging::DebugLogger;
 use crate::diff_engine::{merge, unified_parser};
-use crate::{io, scm, store};
+use crate::{io, store};
 
 pub fn init_mergebuffer(
     conn: &Connection,
@@ -174,7 +174,7 @@ fn maybe_track_pending_p4_backup(diffset: &store::DiffSet, backup_path: &Path) {
         cwd
     ));
 
-    if let Err(err) = scm::track_generated_p4_backup(backup_path, cwd.as_deref()) {
+    if let Err(err) = crate::providers::p4::track_generated_p4_backup(backup_path, cwd.as_deref()) {
         debug.log(format!(
             "tracking_pending_p4_backup_failed path={} error={}",
             backup_path.display(),

@@ -1,0 +1,412 @@
+/* Sidebar */
+
+.sidebar {
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidebar-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sidebar-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icon-button,
+.toolbar-button,
+.btn-merge-toggle,
+.diff-nav button,
+.merge-toolbar button,
+.dialog-segment-button,
+.dialog-mode-button,
+.sidebar-select,
+.dialog-field input,
+.dialog-field select {
+  font: inherit;
+}
+
+.icon-button,
+.toolbar-button,
+.btn-merge-toggle,
+.merge-toolbar button,
+.sidebar-select,
+.dialog-field input,
+.dialog-field select {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+}
+
+.sidebar-select,
+.dialog-field select,
+.editor-settings-field select,
+.settings-field select,
+.settings-override-row select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) calc(50% - 2px),
+    calc(100% - 11px) calc(50% - 2px);
+  background-repeat: no-repeat;
+  background-size: 5px 5px, 5px 5px;
+  padding-right: 34px;
+}
+
+.diff-nav button {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text);
+  border-radius: 6px;
+}
+
+.icon-button,
+.toolbar-button,
+.btn-merge-toggle,
+.diff-nav button,
+.merge-toolbar button,
+.dialog-segment-button,
+.dialog-mode-button {
+  cursor: pointer;
+}
+
+.icon-button,
+.toolbar-button,
+.diff-nav button,
+.merge-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.icon-button:hover,
+.toolbar-button:hover,
+.diff-nav button:hover,
+.merge-toolbar button:hover,
+.dialog-segment-button:hover,
+.dialog-mode-button:hover,
+.sidebar-select:hover {
+  background: var(--hover-bg);
+}
+
+.icon-button:disabled,
+.toolbar-button:disabled,
+.btn-merge-toggle:disabled,
+.diff-nav button:disabled,
+.merge-toolbar button:disabled,
+.dialog-segment-button:disabled,
+.dialog-mode-button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.icon-button svg,
+.toolbar-button svg,
+.btn-merge-toggle svg,
+.diff-nav button svg,
+.merge-toolbar button svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.icon-button-compact {
+  min-width: 96px;
+}
+
+.icon-button-square {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+}
+
+.button-with-icon,
+.toolbar-button-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.button-icon-spin {
+  flex: 0 0 auto;
+}
+
+.sidebar-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-directory-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-directory-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+}
+
+.sidebar-directory-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.sidebar-select {
+  min-width: 0;
+  padding: 7px 34px 7px 10px;
+  background: var(--panel-bg);
+}
+
+.sidebar-select option,
+.dialog-field select option {
+  background: var(--panel-bg);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .sidebar-select:focus,
+:root[data-theme="dark"] .dialog-field select:focus {
+  background: color-mix(in srgb, var(--panel-bg) 88%, white 12%);
+}
+
+.sidebar-directory-path {
+  min-height: 16px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-add-diff {
+  justify-content: center;
+}
+
+.sidebar-error {
+  margin: 10px 12px 0;
+  padding: 8px;
+  border: 1px solid rgba(244, 76, 76, 0.5);
+  background: rgba(244, 76, 76, 0.12);
+  color: #ffb2b2;
+  font-size: 12px;
+  line-height: 1.35;
+  border-radius: 3px;
+}
+
+.sidebar-section-label {
+  padding: 8px 16px 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+.sidebar-empty {
+  padding: 12px 16px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.sidebar-provider-group {
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.sidebar-diffset-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 16px;
+  background: none;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+}
+.sidebar-diffset-btn:hover { background: var(--subtle-hover-bg); }
+
+.sidebar-diffset-row {
+  display: flex;
+  align-items: stretch;
+}
+
+.sidebar-diffset-close {
+  flex: 0 0 auto;
+  width: 28px;
+  border: none;
+  border-left: 1px solid rgba(255,255,255,0.04);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.sidebar-diffset-close:hover {
+  color: var(--text);
+  background: var(--hover-bg);
+}
+
+.sidebar-diffset-close svg {
+  width: 14px;
+  height: 14px;
+}
+
+.chevron { font-size: 10px; width: 12px; }
+.diffset-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--diff-title-lines, 3);
+  word-break: break-word;
+}
+.diffset-title small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: #fff;
+}
+.badge-p4 { background: #8a5cf6; }
+.badge-git { background: #c96532; }
+.badge-patch { background: #2d8f6f; }
+.badge-external { background: #59636e; }
+
+.diffset-meta {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 6px 34px;
+  color: var(--text-muted);
+  font-size: 11px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.diffset-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-file-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 16px 4px 36px;
+  background: none;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font-size: 12px;
+}
+.sidebar-file-btn:hover { background: var(--subtle-hover-bg); }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.sidebar-settings-button {
+  width: 100%;
+  justify-content: flex-start;
+  background: color-mix(in srgb, var(--panel-bg) 92%, transparent);
+}
+
+.sidebar-settings-button-active {
+  background: color-mix(in srgb, var(--accent) 20%, var(--panel-bg));
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
+  color: var(--text);
+}
+
+.file-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-action {
+  max-width: 78px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 10px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.status-modified { background: #e2c541; }
+.status-added { background: #73c991; }
+.status-deleted { background: #f14c4c; }
+.status-renamed { background: #3794ff; }
+.status-edit { background: #e2c541; }
+.status-add { background: #73c991; }
+.status-delete { background: #f14c4c; }
+.status-branch,
+.status-integrate,
+.status-move-add,
+.status-move-delete { background: #3794ff; }

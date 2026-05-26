@@ -21,6 +21,9 @@ export interface WorkspaceSettings {
   savedP4Directories: SavedWorkspaceLocation[];
   selectedGitDirectoryId: string | null;
   selectedP4DirectoryId: string | null;
+  githubPat?: string;
+  gitlabPat?: string;
+  gitlabHostUrl?: string;
 }
 
 export interface P4PendingChangeSummary {
@@ -36,6 +39,15 @@ export interface GitCommitSummary {
   shortRev: string;
   subject: string;
   relativeTime: string;
+}
+
+export interface PullRequestSummary {
+  id: string;
+  title: string;
+  state: string;
+  sourceBranch: string;
+  targetBranch: string;
+  author: string;
 }
 
 export interface DiffSet {

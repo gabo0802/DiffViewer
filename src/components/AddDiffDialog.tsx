@@ -9,6 +9,7 @@ import { LoadingIcon } from "./Icons";
 export type AddDiffImportKind =
   | "gitWorking"
   | "gitCommit"
+  | "gitPullRequest"
   | "p4Pending"
   | "p4Shelved"
   | "p4Submitted";
@@ -19,6 +20,9 @@ export interface AddDiffRequest {
   cwd?: string;
   rev?: string;
   change?: string;
+  prId?: string;
+  targetBranch?: string;
+  prTitle?: string;
 }
 
 interface Props {
@@ -31,8 +35,10 @@ interface Props {
   onCancel: () => void;
   onSubmit: (request: AddDiffRequest) => Promise<void> | void;
   onSelectLocation: (provider: ProviderMode, locationId: string | null) => Promise<void> | void;
-  loadGitCommits: (repoPath: string) => Promise<GitCommitSummary[]>;
+  loadGitCommits: (repoPath: string, branch: string | null) => Promise<GitCommitSummary[]>;
   loadP4PendingChanges: (cwd: string) => Promise<P4PendingChangeSummary[]>;
+  loadGitBranches: (repoPath: string) => Promise<string[]>;
+  loadPullRequests: (repoPath: string) => Promise<import("../types").PullRequestSummary[]>;
 }
 
 type ProviderMode = "git" | "p4";
@@ -50,17 +56,24 @@ export default function AddDiffDialog({
   onSelectLocation,
   loadGitCommits,
   loadP4PendingChanges,
+  loadGitBranches,
+  loadPullRequests,
 }: Props) {
   const defaultProvider = useMemo<ProviderMode>(() => {
     if (selectedP4LocationId) return "p4";
     return "git";
   }, [selectedP4LocationId]);
   const [provider, setProvider] = useState<ProviderMode>(defaultProvider);
-  const [gitMode, setGitMode] = useState<"gitWorking" | "gitCommit">("gitWorking");
+  const [gitMode, setGitMode] = useState<"gitWorking" | "gitCommit" | "gitPullRequest">("gitWorking");
   const [p4Mode, setP4Mode] = useState<"p4Pending" | "p4Submitted" | "p4Shelved">("p4Pending");
   const [change, setChange] = useState("default");
   const [rev, setRev] = useState("HEAD");
+  const [gitBranch, setGitBranch] = useState<string | null>(null);
+  const [gitBranches, setGitBranches] = useState<string[]>([]);
   const [gitCommits, setGitCommits] = useState<GitCommitSummary[]>([]);
+  const [prId, setPrId] = useState("");
+  const [targetBranch, setTargetBranch] = useState("main");
+  const [pullRequests, setPullRequests] = useState<import("../types").PullRequestSummary[]>([]);
   const [pendingChanges, setPendingChanges] = useState<P4PendingChangeSummary[]>([]);
   const [lookupState, setLookupState] = useState<LookupState>("idle");
   const [lookupError, setLookupError] = useState<string | null>(null);
@@ -72,7 +85,12 @@ export default function AddDiffDialog({
     setP4Mode("p4Pending");
     setChange("default");
     setRev("HEAD");
+    setGitBranch(null);
+    setGitBranches([]);
     setGitCommits([]);
+    setPrId("");
+    setTargetBranch("main");
+    setPullRequests([]);
     setPendingChanges([]);
     setLookupState("idle");
     setLookupError(null);
@@ -108,10 +126,37 @@ export default function AddDiffDialog({
 
         if (provider === "git" && gitMode === "gitCommit" && activePath) {
           setLookupState("loading");
-          const nextCommits = await loadGitCommits(activePath);
+          let branches = gitBranches;
+          if (branches.length === 0) {
+            branches = await loadGitBranches(activePath);
+            if (cancelled) return;
+            setGitBranches(branches);
+          }
+          const nextCommits = await loadGitCommits(activePath, gitBranch);
           if (cancelled) return;
           setGitCommits(nextCommits);
-          setRev(nextCommits[0]?.rev ?? "HEAD");
+          if (!nextCommits.find(c => c.rev === rev)) {
+            setRev(nextCommits[0]?.rev ?? "HEAD");
+          }
+          setLookupState("ready");
+          return;
+        }
+
+        if (provider === "git" && gitMode === "gitPullRequest" && activePath) {
+          setLookupState("loading");
+          let branches = gitBranches;
+          if (branches.length === 0) {
+            branches = await loadGitBranches(activePath);
+            if (cancelled) return;
+            setGitBranches(branches);
+          }
+          const prs = await loadPullRequests(activePath);
+          if (cancelled) return;
+          setPullRequests(prs);
+          if (prs.length > 0) {
+            setPrId(prs[0].id);
+            setTargetBranch(prs[0].targetBranch);
+          }
           setLookupState("ready");
           return;
         }
@@ -131,7 +176,10 @@ export default function AddDiffDialog({
   }, [
     activePath,
     gitMode,
+    gitBranch,
+    loadGitBranches,
     loadGitCommits,
+    loadPullRequests,
     loadP4PendingChanges,
     p4Mode,
     provider,
@@ -146,8 +194,9 @@ export default function AddDiffDialog({
     !!activePath &&
     !importing &&
     (activeKind === "gitWorking" ||
-      !!rev.trim() ||
-      !!change.trim());
+      (activeKind === "gitCommit" && !!rev.trim()) ||
+      (activeKind === "gitPullRequest" && !!prId.trim() && !!targetBranch.trim()) ||
+      ((activeKind === "p4Pending" || activeKind === "p4Submitted" || activeKind === "p4Shelved") && !!change.trim()));
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -159,6 +208,11 @@ export default function AddDiffDialog({
     }
     if (activeKind === "gitCommit") {
       await onSubmit({ kind: activeKind, repoPath: activePath, rev: rev.trim() });
+      return;
+    }
+    if (activeKind === "gitPullRequest") {
+      const prTitle = pullRequests.find((pr) => pr.id === prId.trim())?.title;
+      await onSubmit({ kind: activeKind, repoPath: activePath, prId: prId.trim(), targetBranch: targetBranch.trim(), prTitle });
       return;
     }
 
@@ -273,6 +327,11 @@ export default function AddDiffDialog({
                 label="Commit"
                 onClick={() => setGitMode("gitCommit")}
               />
+              <ModeButton
+                active={gitMode === "gitPullRequest"}
+                label="Pull Request"
+                onClick={() => setGitMode("gitPullRequest")}
+              />
             </div>
             <SavedLocationPicker
               label={pathLabel}
@@ -283,6 +342,21 @@ export default function AddDiffDialog({
             <PathSummary label={pathLabel} path={activePath} />
             {gitMode === "gitCommit" && (
               <>
+                <label className="dialog-field">
+                  <span>Branch (Optional)</span>
+                  <select
+                    value={gitBranch ?? ""}
+                    onChange={(event) => setGitBranch(event.target.value || null)}
+                    disabled={!activePath || lookupState === "loading"}
+                  >
+                    <option value="">All branches</option>
+                    {gitBranches.map((branch) => (
+                      <option key={branch} value={branch}>
+                        {branch}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <label className="dialog-field">
                   <span>Recent commits</span>
                   <select
@@ -311,6 +385,55 @@ export default function AddDiffDialog({
                   <div className="dialog-static-value" title={rev}>
                     {gitCommits.find((commit) => commit.rev === rev)?.shortRev ?? rev}
                   </div>
+                </label>
+              </>
+            )}
+            {gitMode === "gitPullRequest" && (
+              <>
+                <label className="dialog-field">
+                  <span>Pull Requests</span>
+                  <select
+                    value={prId}
+                    onChange={(event) => {
+                      const id = event.target.value;
+                      setPrId(id);
+                      const pr = pullRequests.find(p => p.id === id);
+                      if (pr) setTargetBranch(pr.targetBranch);
+                    }}
+                    disabled={!activePath || lookupState === "loading"}
+                  >
+                    {pullRequests.map((pr) => (
+                      <option key={pr.id} value={pr.id}>
+                        #{pr.id} - {pr.title} ({pr.state}) by {pr.author}
+                      </option>
+                    ))}
+                  </select>
+                  <LookupStatus
+                    activePath={activePath}
+                    lookupError={lookupError}
+                    lookupState={lookupState}
+                    loadingLabel="Fetching PRs from GitHub/GitLab..."
+                    emptyLabel="No PRs found. Did you set your PAT in Settings?"
+                    hasResults={pullRequests.length > 0}
+                  />
+                </label>
+                <label className="dialog-field">
+                  <span>Target branch</span>
+                  <select
+                    value={targetBranch}
+                    onChange={(event) => setTargetBranch(event.target.value)}
+                    disabled={!activePath || lookupState === "loading"}
+                  >
+                    {gitBranches.map((branch) => (
+                      <option key={branch} value={branch}>
+                        {branch}
+                      </option>
+                    ))}
+                    {/* Fallback if targetBranch is not in the list but was set by PR */}
+                    {!gitBranches.includes(targetBranch) && targetBranch && (
+                      <option value={targetBranch}>{targetBranch}</option>
+                    )}
+                  </select>
                 </label>
               </>
             )}

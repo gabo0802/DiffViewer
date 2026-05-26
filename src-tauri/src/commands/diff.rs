@@ -2,7 +2,7 @@ use tauri::State;
 
 use crate::{
     app_state::AppState, diff_engine::render::RenderedDiffModel, scm, services::render_service,
-    store, workspace_controller,
+    store, workspace_controller, providers::{ScmProvider, ImportTarget, git::GitProvider, p4::P4Provider},
 };
 
 #[tauri::command]
@@ -30,7 +30,8 @@ pub fn import_git_working_tree(
 ) -> Result<String, String> {
     let conn = state.db.lock().map_err(|err| err.to_string())?;
     let workspace_id = state.current_workspace_id()?;
-    scm::import_git_working_tree(&conn, &workspace_id, &repo_path)
+    let target = ImportTarget::GitWorkingTree { repo_path };
+    GitProvider.import_target(&conn, &workspace_id, &target)
 }
 
 #[tauri::command]
@@ -41,7 +42,8 @@ pub fn import_git_commit(
 ) -> Result<String, String> {
     let conn = state.db.lock().map_err(|err| err.to_string())?;
     let workspace_id = state.current_workspace_id()?;
-    scm::import_git_commit(&conn, &workspace_id, &repo_path, &rev)
+    let target = ImportTarget::GitCommit { repo_path, rev };
+    GitProvider.import_target(&conn, &workspace_id, &target)
 }
 
 #[tauri::command]
@@ -52,7 +54,8 @@ pub fn import_p4_pending(
 ) -> Result<String, String> {
     let conn = state.db.lock().map_err(|err| err.to_string())?;
     let workspace_id = state.current_workspace_id()?;
-    scm::import_p4_pending(&conn, &workspace_id, &change, cwd.as_deref())
+    let target = ImportTarget::P4Pending { change, cwd };
+    P4Provider.import_target(&conn, &workspace_id, &target)
 }
 
 #[tauri::command]
@@ -63,7 +66,8 @@ pub fn import_p4_shelved(
 ) -> Result<String, String> {
     let conn = state.db.lock().map_err(|err| err.to_string())?;
     let workspace_id = state.current_workspace_id()?;
-    scm::import_p4_shelved(&conn, &workspace_id, &change, cwd.as_deref())
+    let target = ImportTarget::P4Shelved { change, cwd };
+    P4Provider.import_target(&conn, &workspace_id, &target)
 }
 
 #[tauri::command]
@@ -74,15 +78,46 @@ pub fn import_p4_submitted(
 ) -> Result<String, String> {
     let conn = state.db.lock().map_err(|err| err.to_string())?;
     let workspace_id = state.current_workspace_id()?;
-    scm::import_p4_submitted(&conn, &workspace_id, &change, cwd.as_deref())
+    let target = ImportTarget::P4Submitted { change, cwd };
+    P4Provider.import_target(&conn, &workspace_id, &target)
 }
 
 #[tauri::command]
 pub fn list_git_commits(
     repo_path: String,
     limit: Option<usize>,
+    branch: Option<String>,
 ) -> Result<Vec<scm::GitCommitSummary>, String> {
-    scm::list_git_commits(&repo_path, limit.unwrap_or(30))
+    scm::list_git_commits(&repo_path, limit.unwrap_or(30), branch.as_deref())
+}
+
+#[tauri::command]
+pub fn list_git_branches(repo_path: String) -> Result<Vec<String>, String> {
+    scm::list_git_branches(&repo_path)
+}
+
+#[tauri::command]
+pub fn get_pull_requests(
+    state: State<AppState>,
+    repo_path: String,
+) -> Result<Vec<scm::pr_api::PullRequestSummary>, String> {
+    let conn = state.db.lock().map_err(|err| err.to_string())?;
+    let workspace_id = state.current_workspace_id()?;
+    scm::get_pull_requests(&conn, &workspace_id, &repo_path)
+}
+
+#[tauri::command]
+pub fn import_git_pull_request(
+    state: State<AppState>,
+    repo_path: String,
+    pr_id: String,
+    target_branch: String,
+    pr_title: Option<String>,
+) -> Result<String, String> {
+    let conn = state.db.lock().map_err(|err| err.to_string())?;
+    let workspace_id = state.current_workspace_id()?;
+    let target = ImportTarget::GitPullRequest { repo_path, pr_id, target_branch, pr_title };
+    GitProvider.import_target(&conn, &workspace_id, &target)
 }
 
 #[tauri::command]

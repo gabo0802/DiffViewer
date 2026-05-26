@@ -77,3 +77,21 @@ pub fn remove_current_workspace_location(
     let provider = workspace_service::WorkspaceLocationProvider::parse(&provider)?;
     workspace_service::remove_location(&conn, &workspace_id, provider, &location_id)
 }
+
+#[tauri::command]
+pub fn update_scm_settings(
+    state: State<AppState>,
+    github_pat: Option<String>,
+    gitlab_pat: Option<String>,
+    gitlab_host_url: Option<String>,
+) -> Result<WorkspaceSettings, String> {
+    let conn = state.db.lock().map_err(|err| err.to_string())?;
+    let workspace_id = state.current_workspace_id()?;
+    workspace_service::update_scm_settings(
+        &conn,
+        &workspace_id,
+        github_pat,
+        gitlab_pat,
+        gitlab_host_url,
+    )
+}

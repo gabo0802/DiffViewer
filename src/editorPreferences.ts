@@ -8,6 +8,7 @@ export type EditorPreferences = {
   insertSpaces: boolean;
   wordWrap: WordWrapMode;
   extensionLanguageOverrides: Record<string, string>;
+  diffTitleLines: number;
 };
 
 export const DEFAULT_EDITOR_PREFERENCES: EditorPreferences = {
@@ -16,6 +17,7 @@ export const DEFAULT_EDITOR_PREFERENCES: EditorPreferences = {
   insertSpaces: true,
   wordWrap: "off",
   extensionLanguageOverrides: {},
+  diffTitleLines: 3,
 };
 
 export const LANGUAGE_OPTIONS = [
@@ -109,6 +111,10 @@ export function loadEditorPreferences(storageKey: string) {
           : DEFAULT_EDITOR_PREFERENCES.insertSpaces,
       wordWrap: normalizeWordWrap(parsed.wordWrap),
       extensionLanguageOverrides: normalizeExtensionOverrides(parsed.extensionLanguageOverrides),
+      diffTitleLines:
+        typeof parsed.diffTitleLines === "number"
+          ? clampDiffTitleLines(parsed.diffTitleLines)
+          : DEFAULT_EDITOR_PREFERENCES.diffTitleLines,
     };
   } catch {
     return DEFAULT_EDITOR_PREFERENCES;
@@ -160,4 +166,12 @@ function clampTabSize(value: unknown) {
 
 function normalizeWordWrap(value: unknown): WordWrapMode {
   return value === "on" || value === "bounded" ? value : "off";
+}
+
+function clampDiffTitleLines(value: unknown) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return DEFAULT_EDITOR_PREFERENCES.diffTitleLines;
+  }
+  return Math.min(5, Math.max(1, Math.round(numeric)));
 }
