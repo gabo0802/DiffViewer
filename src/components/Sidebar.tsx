@@ -11,6 +11,7 @@ import type {
 import AddDiffDialog, { type AddDiffRequest } from "./AddDiffDialog";
 import FormDialog from "./FormDialog";
 import { CloseIcon, LoadingIcon, PlusIcon, SettingsIcon } from "./Icons";
+import "./Sidebar.css";
 
 interface Props {
   onSelectFileDiff: (fd: FileDiff) => void;
@@ -28,6 +29,7 @@ type DiffSetMeta = {
   file_count?: number;
   repo_path?: string;
   rev?: string;
+  pr_type?: string;
 };
 
 type DirectoryProvider = "git" | "p4";
@@ -146,6 +148,9 @@ export default function Sidebar({
           break;
         case "gitCommit":
           diffsetId = await api.importGitCommit(request.repoPath ?? "", request.rev ?? "HEAD");
+          break;
+        case "gitPullRequest":
+          diffsetId = await api.importGitPullRequest(request.repoPath ?? "", request.prId ?? "", request.targetBranch ?? "main", request.prTitle);
           break;
         case "p4Pending":
           diffsetId = await api.importP4Pending(request.change ?? "default", request.cwd);
@@ -345,8 +350,10 @@ export default function Sidebar({
         onCancel={() => setAddDiffVisible(false)}
         onSubmit={handleAddDiff}
         onSelectLocation={handleSelectDirectory}
-        loadGitCommits={(repoPath) => api.listGitCommits(repoPath)}
+        loadGitCommits={(repoPath, branch) => api.listGitCommits(repoPath, 30, branch)}
         loadP4PendingChanges={(cwd) => api.listP4PendingChanges(cwd)}
+        loadGitBranches={(repoPath) => api.listGitBranches(repoPath)}
+        loadPullRequests={(repoPath) => api.getPullRequests(repoPath)}
       />
 
       <FormDialog
@@ -552,7 +559,11 @@ function providerLabel(provider: string) {
 
 function statusLabel(diffset: DiffSet, meta: DiffSetMeta) {
   if (diffset.provider === "p4") return meta.status ?? p4KindLabel(diffset.kind);
-  if (diffset.provider === "git") return diffset.kind === "gitCommit" ? "Commit" : "Working";
+  if (diffset.provider === "git") {
+    if (diffset.kind === "gitCommit") return "Commit";
+    if (diffset.kind === "gitPullRequest") return meta.pr_type ?? "PR";
+    return "Working";
+  }
   return diffset.source_type;
 }
 

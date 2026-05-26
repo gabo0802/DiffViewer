@@ -14,6 +14,8 @@ import { useDiffTabs } from "./hooks/useDiffTabs";
 import { usePersistentState } from "./hooks/usePersistentState";
 import { useResizablePane } from "./hooks/useResizablePane";
 import type { FileDiff, RenderedDiffModel } from "./types";
+import "./components/Workspace.css";
+import "./components/Tabs.css";
 
 const SIDEBAR_WIDTH_KEY = "diffviewer.sidebarWidth";
 const EDITOR_PREFERENCES_KEY = "diffviewer.editorPreferences";
@@ -220,7 +222,10 @@ export default function App() {
   ]);
 
   return (
-    <div className="app-root">
+    <div
+      className="app-root"
+      style={{ "--diff-title-lines": editorPreferences.diffTitleLines } as React.CSSProperties}
+    >
       <div className="sidebar-shell" style={{ width: sidebarWidth }}>
         <Sidebar
           onSelectFileDiff={handleSelectFileDiff}

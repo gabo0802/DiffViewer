@@ -1,0 +1,425 @@
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+
+.workspace-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.editor-area {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.workspace-shell-merge .editor-area {
+  min-height: 180px;
+}
+
+.empty-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 16px;
+}
+
+.empty-state-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Diff viewer */
+
+.diff-viewer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.diff-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.diff-path { font-weight: 600; }
+
+.diff-nav {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.diff-nav button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+
+.diff-editors {
+  flex: 1;
+  display: flex;
+  gap: 0;
+  background: var(--bg);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.diff-editor-col {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg);
+}
+
+.diff-editor-col-split {
+  flex: 0 0 auto;
+}
+
+.diff-editor-col-full {
+  flex: 1 1 100%;
+}
+
+.diff-editor-resizer {
+  flex: 0 0 8px;
+  cursor: ew-resize;
+  background: transparent;
+  position: relative;
+}
+
+.diff-editor-resizer::before {
+  content: "";
+  position: absolute;
+  inset: 0 2px;
+  background: var(--border);
+  opacity: 0.45;
+}
+
+.diff-editor-resizer:hover::before,
+.diff-editor-resizer-active::before {
+  opacity: 1;
+  background: var(--accent);
+}
+
+.editor-label {
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--tab-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Merge panel */
+
+.merge-panel {
+  flex: 0 0 auto;
+  min-height: 180px;
+  border-top: 2px solid var(--accent);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+  background: var(--bg);
+}
+
+.merge-resizer {
+  flex: 0 0 10px;
+  cursor: ns-resize;
+  background: linear-gradient(to bottom, rgba(14,99,156,0.7), rgba(14,99,156,0.1));
+}
+.merge-resizer:hover {
+  background: linear-gradient(to bottom, rgba(14,99,156,1), rgba(14,99,156,0.2));
+}
+
+.merge-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 6px 12px;
+  background: var(--tab-bg);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+
+.merge-title { font-weight: 600; }
+.merge-dirty { color: #e2c541; font-size: 11px; }
+.merge-language {
+  color: var(--text-muted);
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 6px;
+  text-transform: capitalize;
+}
+
+.merge-editor-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editor-settings-panel {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-bg);
+}
+
+.editor-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.editor-settings-field input[type="number"],
+.editor-settings-field select {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 3px;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.editor-settings-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding-top: 22px;
+}
+
+.editor-settings-checkbox input {
+  margin: 0;
+}
+
+.merge-error {
+  padding: 8px 12px;
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+/* Make inline suggestion/ghost text visible on dark editor backgrounds. */
+.monaco-editor .ghost-text,
+.monaco-editor .suggest-preview-text {
+  color: #8fb8ff !important;
+  opacity: 0.9 !important;
+}
+
+.monaco-editor .diff-line-del {
+  background: color-mix(in srgb, var(--del-bg) 90%, transparent);
+}
+
+.monaco-editor .diff-line-del-empty {
+  background: color-mix(in srgb, var(--del-bg) 90%, transparent);
+}
+
+.monaco-editor .diff-line-add {
+  background: color-mix(in srgb, var(--add-bg) 92%, transparent);
+}
+
+.monaco-editor .diff-line-del-anchor {
+  background: color-mix(in srgb, var(--del-bg) 75%, transparent);
+}
+
+.monaco-editor .diff-line-empty {
+  background: var(--empty-row-bg);
+}
+
+.monaco-editor .merge-line-del-marker {
+  border-left: 3px solid #f14c4c;
+  margin-left: 3px;
+}
+
+.monaco-editor .diff-gutter-add {
+  border-left: 3px solid #2ea043;
+  margin-left: 3px;
+}
+
+.monaco-editor .diff-gutter-del {
+  border-left: 3px solid #f14c4c;
+  margin-left: 3px;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.38);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 20;
+}
+
+.dialog-card {
+  width: min(440px, 100%);
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+}
+
+.dialog-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dialog-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.dialog-description {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.dialog-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.dialog-field input,
+.dialog-field select {
+  width: 100%;
+  background: var(--bg);
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.dialog-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.dialog-input-action {
+  background: var(--panel-bg);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialog-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dialog-segment {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.dialog-segment-button,
+.dialog-mode-button {
+  padding: 10px 12px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.dialog-segment-button-active,
+.dialog-mode-button-active {
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel-bg));
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
+}
+
+.dialog-mode-list {
+  display: grid;
+  gap: 8px;
+}
+
+.dialog-path-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--tab-bg) 68%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.dialog-path-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+}
+
+.dialog-path-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dialog-helper {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.dialog-helper-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dialog-helper-error {
+  color: var(--danger);
+}
+
+.add-diff-dialog {
+  width: min(560px, 100%);
+}

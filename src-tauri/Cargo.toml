@@ -16,3 +16,5 @@ uuid = { version = "1", features = ["v4"] }
 sha2 = "0.10"
 dirs = "5"
 chrono = "0.4"
+ureq = { version = "3.3.0", features = ["json"] }
+url = "2.5.8"

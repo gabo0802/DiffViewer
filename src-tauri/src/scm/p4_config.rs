@@ -2,15 +2,15 @@ use std::path::PathBuf;
 use std::process::Command;
 
 #[derive(Debug, Clone, Default)]
-pub(super) struct P4Config {
-    pub(super) client: Option<String>,
-    pub(super) port: Option<String>,
-    pub(super) user: Option<String>,
-    pub(super) charset: Option<String>,
-    pub(super) source_path: Option<PathBuf>,
+pub(crate) struct P4Config {
+    pub(crate) client: Option<String>,
+    pub(crate) port: Option<String>,
+    pub(crate) user: Option<String>,
+    pub(crate) charset: Option<String>,
+    pub(crate) source_path: Option<PathBuf>,
 }
 
-pub(super) fn load_p4_config(cwd: Option<&str>) -> P4Config {
+pub(crate) fn load_p4_config(cwd: Option<&str>) -> P4Config {
     let Some(cwd) = cwd.filter(|value| !value.trim().is_empty()) else {
         return P4Config::default();
     };
@@ -52,7 +52,7 @@ pub(super) fn load_p4_config(cwd: Option<&str>) -> P4Config {
     P4Config::default()
 }
 
-pub(super) fn apply_p4_config_env(cmd: &mut Command, p4_config: &P4Config) {
+pub(crate) fn apply_p4_config_env(cmd: &mut Command, p4_config: &P4Config) {
     if let Some(client) = p4_config
         .client
         .as_deref()

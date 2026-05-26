@@ -7,6 +7,7 @@ mod debugging;
 mod diff_engine;
 mod io;
 mod open_request;
+mod providers;
 mod scm;
 mod services;
 mod store;
@@ -36,6 +37,7 @@ fn main() {
             commands::workspace::save_current_workspace_location,
             commands::workspace::select_current_workspace_location,
             commands::workspace::remove_current_workspace_location,
+            commands::workspace::update_scm_settings,
             commands::system::browse_for_directory,
             commands::diff::import_patch,
             commands::diff::compare_two_files,
@@ -45,6 +47,9 @@ fn main() {
             commands::diff::import_p4_shelved,
             commands::diff::import_p4_submitted,
             commands::diff::list_git_commits,
+            commands::diff::list_git_branches,
+            commands::diff::get_pull_requests,
+            commands::diff::import_git_pull_request,
             commands::diff::list_p4_pending_changes,
             commands::diff::list_diffsets,
             commands::diff::list_filediffs,

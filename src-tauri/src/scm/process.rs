@@ -10,7 +10,7 @@ use super::p4_config::{apply_p4_config_env, P4Config};
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-pub(super) fn run_command(
+pub(crate) fn run_command(
     program: &str,
     args: &[&str],
     cwd: Option<&str>,
@@ -19,7 +19,7 @@ pub(super) fn run_command(
     run_command_owned(program, &args, cwd, None)
 }
 
-pub(super) fn run_p4(
+pub(crate) fn run_p4(
     args: &[&str],
     cwd: Option<&str>,
     p4_config: &P4Config,
@@ -28,7 +28,7 @@ pub(super) fn run_p4(
     run_p4_owned(&owned, cwd, p4_config)
 }
 
-pub(super) fn run_p4_owned(
+pub(crate) fn run_p4_owned(
     args: &[String],
     cwd: Option<&str>,
     p4_config: &P4Config,
