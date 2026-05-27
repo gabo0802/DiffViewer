@@ -87,6 +87,7 @@ pub fn compare_two_files(
     left_path: &str,
     right_path: &str,
     title: Option<&str>,
+    existing_diffset_id: Option<String>,
 ) -> Result<String, String> {
     let left_resolved = resolve_input_path(left_path);
     let right_resolved = resolve_input_path(right_path);
@@ -125,26 +126,30 @@ pub fn compare_two_files(
     let hunks = twoway::compute_hunks(&left_text, &right_text);
     let hunks_json = serde_json::to_string(&hunks).unwrap_or_else(|_| "[]".to_string());
 
-    let diffset_id = uuid::Uuid::new_v4().to_string();
-    let display_title = title.unwrap_or("Two-way compare");
+    let diffset_id = existing_diffset_id.unwrap_or_else(|| {
+        let new_id = uuid::Uuid::new_v4().to_string();
+        let display_title = title.unwrap_or("Two-way compare");
 
-    store::insert_diffset(
-        &tx,
-        &DiffSet {
-            diffset_id: diffset_id.clone(),
-            workspace_id: workspace_id.to_string(),
-            title: display_title.to_string(),
-            source_type: "External".to_string(),
-            provider: "external".to_string(),
-            kind: "twoWayCompare".to_string(),
-            source_meta_json: serde_json::json!({
-                "left": left_resolved.to_string_lossy(),
-                "right": right_resolved.to_string_lossy()
-            })
-            .to_string(),
-            created_at: now,
-        },
-    )?;
+        // We ignore the result of insert_diffset here because if it fails, the tx will just rollback later
+        let _ = store::insert_diffset(
+            &tx,
+            &DiffSet {
+                diffset_id: new_id.clone(),
+                workspace_id: workspace_id.to_string(),
+                title: display_title.to_string(),
+                source_type: "External".to_string(),
+                provider: "external".to_string(),
+                kind: "twoWayCompare".to_string(),
+                source_meta_json: serde_json::json!({
+                    "left": left_resolved.to_string_lossy(),
+                    "right": right_resolved.to_string_lossy()
+                })
+                .to_string(),
+                created_at: now,
+            },
+        );
+        new_id
+    });
 
     let filediff_id = uuid::Uuid::new_v4().to_string();
     let left_name = left_resolved
@@ -175,7 +180,7 @@ pub fn compare_two_files(
             content_left_json,
             content_right_json,
             hunks_json,
-            write_target_json: WriteTarget::path(right_resolved.to_string_lossy()).to_json_string(),
+            write_target_json: WriteTarget::ReadOnly.to_json_string(),
             created_at: now,
         },
     )?;

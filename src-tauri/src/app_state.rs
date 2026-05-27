@@ -4,6 +4,7 @@ use std::sync::Mutex;
 pub struct AppState {
     pub db: Mutex<Connection>,
     pub current_workspace_id: Mutex<String>,
+    pub external_diff_group: Mutex<Option<(String, i64)>>,
 }
 
 impl AppState {
@@ -11,6 +12,7 @@ impl AppState {
         Self {
             db: Mutex::new(conn),
             current_workspace_id: Mutex::new(current_workspace_id),
+            external_diff_group: Mutex::new(None),
         }
     }
 

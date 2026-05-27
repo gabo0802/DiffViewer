@@ -20,7 +20,7 @@ pub fn compare_two_files(
 ) -> Result<String, String> {
     let conn = state.db.lock().map_err(|err| err.to_string())?;
     let workspace_id = state.current_workspace_id()?;
-    workspace_controller::compare_two_files(&conn, &workspace_id, &left_path, &right_path, None)
+    workspace_controller::compare_two_files(&conn, &workspace_id, &left_path, &right_path, None, None)
 }
 
 #[tauri::command]
