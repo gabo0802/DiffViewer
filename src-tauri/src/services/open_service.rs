@@ -1,5 +1,3 @@
-use rusqlite::Connection;
-
 use crate::{app_state::AppState, open_request::OpenRequest, workspace_controller};
 
 pub fn handle_open_request(
@@ -54,21 +52,13 @@ fn execute_two_way_with_grouping(
     right_path: &str,
     title: Option<&str>,
 ) -> Result<String, String> {
-    let now = chrono::Utc::now().timestamp();
-    
-    let existing_id: Option<String> = conn.query_row(
-        "SELECT diffset_id FROM diffsets WHERE provider = 'external' AND workspace_id = ?1 AND created_at >= ?2 ORDER BY created_at DESC LIMIT 1",
-        rusqlite::params![workspace_id, now - 5],
-        |row| row.get(0)
-    ).ok();
-
     let diffset_id = workspace_controller::compare_two_files(
         conn,
         workspace_id,
         left_path,
         right_path,
         title,
-        existing_id,
+        None,
     )?;
 
     Ok(diffset_id)
