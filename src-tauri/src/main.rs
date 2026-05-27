@@ -14,7 +14,16 @@ mod store;
 mod workspace_controller;
 
 use app_state::AppState;
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, Manager, UserAttentionType};
+
+fn focus_and_highlight_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.request_user_attention(Some(UserAttentionType::Informational));
+        let _ = window.set_focus();
+    }
+}
 
 fn main() {
     let conn = store::open_db().expect("Failed to open database");
@@ -33,6 +42,7 @@ fn main() {
                 if let Err(err) = services::open_service::handle_open_request(&state, request) {
                     eprintln!("Failed to handle single-instance open request: {}", err);
                 } else {
+                    focus_and_highlight_main_window(app);
                     let _ = app.emit("refresh-workspace", ());
                 }
             }

@@ -1,4 +1,4 @@
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use std::path::PathBuf;
 
 use crate::content_source::{ContentSource, WriteTarget};
@@ -126,30 +126,57 @@ pub fn compare_two_files(
     let hunks = twoway::compute_hunks(&left_text, &right_text);
     let hunks_json = serde_json::to_string(&hunks).unwrap_or_else(|_| "[]".to_string());
 
-    let diffset_id = existing_diffset_id.unwrap_or_else(|| {
-        let new_id = uuid::Uuid::new_v4().to_string();
-        let display_title = title.unwrap_or("Two-way compare");
+    let mut diffset_id = None;
+    if let Some(candidate_id) = existing_diffset_id {
+        let existing = tx
+            .query_row(
+                "SELECT diffset_id FROM diffsets WHERE diffset_id = ?1",
+                rusqlite::params![candidate_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(|err| err.to_string())?;
+        if existing.is_some() {
+            diffset_id = Some(candidate_id);
+        }
+    }
 
-        // We ignore the result of insert_diffset here because if it fails, the tx will just rollback later
-        let _ = store::insert_diffset(
-            &tx,
-            &DiffSet {
-                diffset_id: new_id.clone(),
-                workspace_id: workspace_id.to_string(),
-                title: display_title.to_string(),
-                source_type: "External".to_string(),
-                provider: "external".to_string(),
-                kind: "twoWayCompare".to_string(),
-                source_meta_json: serde_json::json!({
-                    "left": left_resolved.to_string_lossy(),
-                    "right": right_resolved.to_string_lossy()
-                })
-                .to_string(),
-                created_at: now,
-            },
-        );
-        new_id
-    });
+    if diffset_id.is_none() {
+        diffset_id = tx
+            .query_row(
+                "SELECT diffset_id FROM diffsets WHERE provider = 'external' AND workspace_id = ?1 AND created_at >= ?2 ORDER BY created_at DESC LIMIT 1",
+                rusqlite::params![workspace_id, now - 5],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|err| err.to_string())?;
+    }
+
+    let diffset_id = match diffset_id {
+        Some(existing) => existing,
+        None => {
+            let new_id = uuid::Uuid::new_v4().to_string();
+            let display_title = title.unwrap_or("Two-way compare");
+            store::insert_diffset(
+                &tx,
+                &DiffSet {
+                    diffset_id: new_id.clone(),
+                    workspace_id: workspace_id.to_string(),
+                    title: display_title.to_string(),
+                    source_type: "External".to_string(),
+                    provider: "external".to_string(),
+                    kind: "twoWayCompare".to_string(),
+                    source_meta_json: serde_json::json!({
+                        "left": left_resolved.to_string_lossy(),
+                        "right": right_resolved.to_string_lossy()
+                    })
+                    .to_string(),
+                    created_at: now,
+                },
+            )?;
+            new_id
+        }
+    };
 
     let filediff_id = uuid::Uuid::new_v4().to_string();
     let left_name = left_resolved
