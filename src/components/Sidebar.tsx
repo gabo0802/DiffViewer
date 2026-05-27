@@ -28,6 +28,7 @@ type DiffSetMeta = {
   client?: string;
   file_count?: number;
   repo_path?: string;
+  cwd?: string;
   rev?: string;
   pr_type?: string;
 };
@@ -492,8 +493,7 @@ function DiffSetRow({
         <button className="sidebar-diffset-btn" onClick={onToggle}>
           <span className="chevron">{expanded ? "v" : ">"}</span>
           <span className="diffset-title">
-            {isP4 && meta.change ? `CL ${meta.change}` : diffset.title}
-            {isP4 && <small>{diffset.title}</small>}
+            {isP4 && meta.change ? `${meta.change} - ${diffset.title}` : diffset.title}
           </span>
           <span className={`diffset-type badge badge-${diffset.provider}`}>
             {statusLabel(diffset, meta)}
@@ -513,7 +513,7 @@ function DiffSetRow({
       </div>
       <div className="diffset-meta">
         {meta.user || meta.client ? <span>{[meta.user, meta.client].filter(Boolean).join("@")}</span> : null}
-        {meta.repo_path ? <span>{meta.repo_path}</span> : null}
+        {meta.repo_path || meta.cwd ? <span>{meta.repo_path || meta.cwd}</span> : null}
         {count !== undefined ? <span>{count} files</span> : null}
       </div>
 
