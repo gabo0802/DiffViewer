@@ -330,9 +330,8 @@ export default function Sidebar({
       <div className="sidebar-footer">
         <button
           type="button"
-          className={`toolbar-button toolbar-button-with-icon sidebar-settings-button ${
-            settingsActive ? "sidebar-settings-button-active" : ""
-          }`}
+          className={`toolbar-button toolbar-button-with-icon sidebar-settings-button ${settingsActive ? "sidebar-settings-button-active" : ""
+            }`}
           onClick={onOpenSettings}
           title="Open settings"
         >
@@ -493,7 +492,7 @@ function DiffSetRow({
         <button className="sidebar-diffset-btn" onClick={onToggle}>
           <span className="chevron">{expanded ? "v" : ">"}</span>
           <span className="diffset-title">
-            {isP4 && meta.change ? `${meta.change} - ${diffset.title}` : diffset.title}
+            {diffset.title}
           </span>
           <span className={`diffset-type badge badge-${diffset.provider}`}>
             {statusLabel(diffset, meta)}
