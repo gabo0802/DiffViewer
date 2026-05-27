@@ -289,7 +289,7 @@ export default function AddDiffDialog({
                     <option key={item.change} value={item.change}>
                       {item.isDefault
                         ? "default"
-                        : `${item.change} - ${item.description}`}
+                        : `${item.description}`}
                     </option>
                   ))}
                   {pendingChanges.length === 0 && <option value="default">default</option>}
