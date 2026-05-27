@@ -25,9 +25,6 @@ fn main() {
 
     let args: Vec<String> = std::env::args().collect();
     debugging::configure_from_args(&args);
-    if let Some(request) = open_request::parse_argv(&args) {
-        services::open_service::handle_startup_request(&app_state, request);
-    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -40,6 +37,13 @@ fn main() {
                 }
             }
         }))
+        .setup(move |app| {
+            if let Some(request) = open_request::parse_argv(&args) {
+                let state = app.state::<AppState>();
+                services::open_service::handle_startup_request(&state, request);
+            }
+            Ok(())
+        })
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             commands::workspace::get_current_workspace,

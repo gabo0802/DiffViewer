@@ -6,7 +6,7 @@ pub fn handle_open_request(
     app_state: &AppState,
     request: OpenRequest,
 ) -> Result<String, String> {
-    let conn = app_state.db.lock().map_err(|e| e.to_string())?;
+    let mut conn = app_state.db.lock().map_err(|e| e.to_string())?;
     let workspace_id = app_state.current_workspace_id()?;
     
     match request {
@@ -20,7 +20,7 @@ pub fn handle_open_request(
             ..
         } => execute_two_way_with_grouping(
             app_state,
-            &conn,
+            &mut *conn,
             &workspace_id,
             &left_path,
             &right_path,
@@ -32,7 +32,7 @@ pub fn handle_open_request(
             } else if paths.len() == 2 {
                 execute_two_way_with_grouping(
                     app_state,
-                    &conn,
+                    &mut *conn,
                     &workspace_id,
                     &paths[0],
                     &paths[1],
@@ -47,25 +47,20 @@ pub fn handle_open_request(
 }
 
 fn execute_two_way_with_grouping(
-    app_state: &AppState,
-    conn: &rusqlite::Connection,
+    _app_state: &AppState,
+    conn: &mut rusqlite::Connection,
     workspace_id: &str,
     left_path: &str,
     right_path: &str,
     title: Option<&str>,
 ) -> Result<String, String> {
     let now = chrono::Utc::now().timestamp();
-    let mut group_lock = app_state.external_diff_group.lock().map_err(|e| e.to_string())?;
     
-    let existing_id = if let Some((id, timestamp)) = &*group_lock {
-        if now - timestamp <= 5 {
-            Some(id.clone())
-        } else {
-            None
-        }
-    } else {
-        None
-    };
+    let existing_id: Option<String> = conn.query_row(
+        "SELECT diffset_id FROM diffsets WHERE provider = 'external' AND workspace_id = ?1 AND created_at >= ?2 ORDER BY created_at DESC LIMIT 1",
+        rusqlite::params![workspace_id, now - 5],
+        |row| row.get(0)
+    ).ok();
 
     let diffset_id = workspace_controller::compare_two_files(
         conn,
@@ -76,7 +71,6 @@ fn execute_two_way_with_grouping(
         existing_id,
     )?;
 
-    *group_lock = Some((diffset_id.clone(), now));
     Ok(diffset_id)
 }
 
@@ -134,12 +128,12 @@ mod tests {
         fs::write(&file3, "C").unwrap();
         fs::write(&file4, "D").unwrap();
 
-        let conn = app_state.db.lock().unwrap();
+        let mut conn = app_state.db.lock().unwrap();
         let workspace_id = app_state.current_workspace_id().unwrap();
 
         let diffset_id_1 = execute_two_way_with_grouping(
             &app_state,
-            &conn,
+            &mut conn,
             &workspace_id,
             file1.to_str().unwrap(),
             file2.to_str().unwrap(),
@@ -148,7 +142,7 @@ mod tests {
 
         let diffset_id_2 = execute_two_way_with_grouping(
             &app_state,
-            &conn,
+            &mut conn,
             &workspace_id,
             file3.to_str().unwrap(),
             file4.to_str().unwrap(),
@@ -167,13 +161,11 @@ mod tests {
             assert_eq!(fd.write_target_json, r#"{"type":"read_only"}"#);
         }
 
-        // To test expiration, we can modify the timestamp in the lock
-        {
-            let mut lock = app_state.external_diff_group.lock().unwrap();
-            if let Some((_, ts)) = &mut *lock {
-                *ts -= 10; // set it to 10 seconds ago
-            }
-        }
+        // To test expiration, we can modify the timestamp in the database
+        conn.execute(
+            "UPDATE diffsets SET created_at = created_at - 10 WHERE diffset_id = ?1",
+            rusqlite::params![diffset_id_1],
+        ).unwrap();
 
         let file5 = dir.path().join("e.txt");
         let file6 = dir.path().join("f.txt");
@@ -182,7 +174,7 @@ mod tests {
 
         let diffset_id_3 = execute_two_way_with_grouping(
             &app_state,
-            &conn,
+            &mut conn,
             &workspace_id,
             file5.to_str().unwrap(),
             file6.to_str().unwrap(),
