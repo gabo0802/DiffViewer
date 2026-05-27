@@ -14,20 +14,33 @@ mod store;
 mod workspace_controller;
 
 use app_state::AppState;
+use tauri::{Emitter, Manager};
 
 fn main() {
     let conn = store::open_db().expect("Failed to open database");
     let inbox = store::ensure_inbox(&conn).expect("Failed to ensure Inbox workspace");
     let current_workspace_id = inbox.workspace_id.clone();
 
+    let app_state = AppState::new(conn, current_workspace_id);
+
     let args: Vec<String> = std::env::args().collect();
     debugging::configure_from_args(&args);
     if let Some(request) = open_request::parse_argv(&args) {
-        services::open_service::handle_startup_request(&conn, &current_workspace_id, request);
+        services::open_service::handle_startup_request(&app_state, request);
     }
 
     tauri::Builder::default()
-        .manage(AppState::new(conn, current_workspace_id))
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            if let Some(request) = open_request::parse_argv(&argv) {
+                let state = app.state::<AppState>();
+                if let Err(err) = services::open_service::handle_open_request(&state, request) {
+                    eprintln!("Failed to handle single-instance open request: {}", err);
+                } else {
+                    let _ = app.emit("refresh-workspace", ());
+                }
+            }
+        }))
+        .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             commands::workspace::get_current_workspace,
             commands::workspace::get_current_workspace_settings,

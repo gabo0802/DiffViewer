@@ -22,6 +22,12 @@ pub fn open_db() -> Result<Connection, String> {
     Ok(conn)
 }
 
+pub fn open_in_memory_db() -> Result<Connection, String> {
+    let conn = Connection::open_in_memory().map_err(|e| e.to_string())?;
+    migrations::run(&conn)?;
+    Ok(conn)
+}
+
 // Data structs
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

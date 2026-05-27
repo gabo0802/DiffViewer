@@ -1,3 +1,4 @@
+import { listen } from "@tauri-apps/api/event";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import * as api from "../api";
 import { buildDisambiguatedPathLabels } from "../pathLabels";
@@ -103,6 +104,16 @@ export default function Sidebar({
     if (!workspace || refreshCommandToken === 0) return;
     refreshFromSidebar().catch((err) => setError(String(err)));
   }, [refreshCommandToken, workspace]);
+
+  useEffect(() => {
+    if (!workspace) return;
+    const unlisten = listen("refresh-workspace", () => {
+      refreshFromSidebar().catch((err) => setError(String(err)));
+    });
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, [workspace]);
 
   const grouped = useMemo(() => {
     const groups = new Map<string, DiffSet[]>();
