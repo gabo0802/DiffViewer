@@ -82,7 +82,7 @@ pub fn import_patch(
 
 /// Compare two files and create a DiffSet in the current workspace.
 pub fn compare_two_files(
-    conn: &Connection,
+    conn: &mut Connection,
     workspace_id: &str,
     left_path: &str,
     right_path: &str,
@@ -100,7 +100,7 @@ pub fn compare_two_files(
 
     let now = chrono::Utc::now().timestamp();
     let tx = conn
-        .unchecked_transaction()
+        .transaction_with_behavior(rusqlite::TransactionBehavior::Exclusive)
         .map_err(|err| err.to_string())?;
     store::insert_snapshot(
         &tx,
