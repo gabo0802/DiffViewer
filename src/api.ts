@@ -4,6 +4,7 @@ import type {
   WorkspaceSettings,
   P4PendingChangeSummary,
   GitCommitSummary,
+  GitStashSummary,
   PullRequestSummary,
   DiffSet,
   FileDiff,
@@ -76,6 +77,18 @@ export const importGitWorkingTree = (repoPath: string) =>
 
 export const importGitCommit = (repoPath: string, rev: string) =>
   invoke<string>("import_git_commit", { repoPath, rev });
+
+export const importGitStash = (repoPath: string, stashId: string) =>
+  invoke<string>("import_git_stash", { repoPath, stashId });
+
+export const listGitStashes = (repoPath: string) =>
+  invoke<GitStashSummary[]>("list_git_stashes", { repoPath });
+
+export const popGitStash = (repoPath: string, stashId: string) =>
+  invoke<void>("pop_git_stash", { repoPath, stashId });
+
+export const applyGitStash = (repoPath: string, stashId: string) =>
+  invoke<void>("apply_git_stash", { repoPath, stashId });
 
 export const importP4Pending = (change: string, cwd?: string) =>
   invoke<string>("import_p4_pending", { change, cwd });

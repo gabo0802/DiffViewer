@@ -157,3 +157,18 @@ export function SettingsIcon({ size = 18, ...props }: IconProps) {
     </svg>
   );
 }
+
+export function PopIcon({ size = 18, ...props }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" {...props}>
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M7 9.5L4 11l8 4l8-4l-3-1.5M4 15l8 4l8-4m-8-4V4M9 7l3-3l3 3"
+      />
+    </svg>
+  );
+}

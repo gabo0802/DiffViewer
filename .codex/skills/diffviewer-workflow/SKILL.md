@@ -66,6 +66,13 @@ Use the existing repo patterns rather than inventing new ones.
   - stderr
 - If P4 behavior is wrong, fix the backend command/context first before adjusting the UI.
 
+## Git Debugging
+
+- Git logging also leverages `src-tauri/src/debugging.rs` using `DebugLogger::new("scm")`.
+  - Enable it via `--debug` flag as well.
+- When debugging Git backend failures (e.g., git stash pop / apply or git logs), look for `[diffviewer-debug][scm]` entries in the terminal running Tauri.
+- Similar to P4, if Git import/action behavior is wrong or silently failing, fix the backend logic first instead of adding temporary workarounds in the frontend.
+
 ## UI Patterns
 
 - Main coordination files:
