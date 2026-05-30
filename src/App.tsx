@@ -4,7 +4,7 @@ import Sidebar from "./components/Sidebar";
 import DiffViewer from "./components/DiffViewer";
 import MergePanel from "./components/MergePanel";
 import SettingsPanel from "./components/SettingsPanel";
-import { CloseIcon, EditIcon, ThemeIcon, PopIcon, PlusIcon } from "./components/Icons";
+import { CloseIcon, EditIcon, ThemeIcon, PopIcon, PlusIcon, LoadingIcon } from "./components/Icons";
 import {
   loadEditorPreferences,
   type EditorPreferences,
