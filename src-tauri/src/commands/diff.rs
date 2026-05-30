@@ -198,3 +198,30 @@ pub fn mark_reviewed(
         },
     )
 }
+
+#[tauri::command]
+pub fn import_git_stash(
+    state: State<AppState>,
+    repo_path: String,
+    stash_id: String,
+) -> Result<String, String> {
+    let conn = state.db.lock().map_err(|err| err.to_string())?;
+    let workspace_id = state.current_workspace_id()?;
+    let target = ImportTarget::GitStash { repo_path, stash_id };
+    GitProvider.import_target(&conn, &workspace_id, &target)
+}
+
+#[tauri::command]
+pub fn list_git_stashes(repo_path: String) -> Result<Vec<crate::providers::git::GitStashSummary>, String> {
+    crate::providers::git::list_git_stashes(&repo_path)
+}
+
+#[tauri::command]
+pub fn pop_git_stash(repo_path: String, stash_id: String) -> Result<(), String> {
+    crate::providers::git::pop_git_stash(&repo_path, &stash_id)
+}
+
+#[tauri::command]
+pub fn apply_git_stash(repo_path: String, stash_id: String) -> Result<(), String> {
+    crate::providers::git::apply_git_stash(&repo_path, &stash_id)
+}

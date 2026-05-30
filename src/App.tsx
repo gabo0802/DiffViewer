@@ -4,7 +4,7 @@ import Sidebar from "./components/Sidebar";
 import DiffViewer from "./components/DiffViewer";
 import MergePanel from "./components/MergePanel";
 import SettingsPanel from "./components/SettingsPanel";
-import { CloseIcon, EditIcon, ThemeIcon } from "./components/Icons";
+import { CloseIcon, EditIcon, ThemeIcon, PopIcon, PlusIcon } from "./components/Icons";
 import {
   loadEditorPreferences,
   type EditorPreferences,
@@ -30,6 +30,7 @@ export default function App() {
   const [selectedTabIds, setSelectedTabIds] = useState<string[]>([]);
   const [previousHunkToken, setPreviousHunkToken] = useState(0);
   const [nextHunkToken, setNextHunkToken] = useState(0);
+  const [appDiffsets, setAppDiffsets] = useState<DiffSet[]>([]);
   const [editorPreferences, setEditorPreferences] = useState<EditorPreferences>(() =>
     loadEditorPreferences(EDITOR_PREFERENCES_KEY)
   );
@@ -135,6 +136,39 @@ export default function App() {
     );
   }, [currentFd, setActiveTab, setTabs]);
 
+  const currentDiffset = appDiffsets.find((ds) => ds.diffset_id === currentFd?.diffset_id);
+  const isStash = currentDiffset?.kind === "gitStash";
+
+  const handlePopStash = async () => {
+    if (!currentDiffset) return;
+    
+    const meta = JSON.parse(currentDiffset.source_meta_json || "{}");
+    if (!meta.repo_path || !meta.stash_id) return;
+
+    try {
+      await api.popGitStash(meta.repo_path, meta.stash_id);
+      await api.deleteDiffset(currentDiffset.diffset_id);
+      closeCurrentSelection();
+      requestSidebarRefresh();
+    } catch (err) {
+      console.error("[Stash] Pop Error:", err);
+    }
+  };
+
+  const handleApplyStash = async () => {
+    if (!currentDiffset) return;
+
+    const meta = JSON.parse(currentDiffset.source_meta_json || "{}");
+    if (!meta.repo_path || !meta.stash_id) return;
+
+    try {
+      await api.applyGitStash(meta.repo_path, meta.stash_id);
+      requestSidebarRefresh();
+    } catch (err) {
+      console.error("[Stash] Apply Error:", err);
+    }
+  };
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const hasModifier = event.ctrlKey || event.metaKey;
@@ -236,6 +270,7 @@ export default function App() {
           settingsActive={activeWorkspaceView === "settings"}
           refreshToken={sidebarRefreshToken}
           refreshCommandToken={sidebarRefreshCommandToken}
+          onDiffsetsLoaded={setAppDiffsets}
         />
       </div>
       <div
@@ -301,7 +336,7 @@ export default function App() {
               <ThemeIcon mode={theme} />
               <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
             </button>
-            {currentFd && canEditCurrent && (
+            {currentFd && canEditCurrent && !isStash && (
               <button
                 type="button"
                 className="btn-merge-toggle button-with-icon"
@@ -314,6 +349,28 @@ export default function App() {
                 <EditIcon />
                 <span>{mergeVisible ? "Hide Merge" : "Edit / Resolve"}</span>
               </button>
+            )}
+            {currentFd && isStash && (
+              <>
+                <button
+                  type="button"
+                  className="btn-merge-toggle button-with-icon"
+                  onClick={handleApplyStash}
+                  title="Apply Stash"
+                >
+                  <PlusIcon />
+                  <span>Apply Stash</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn-merge-toggle button-with-icon"
+                  onClick={handlePopStash}
+                  title="Pop Stash"
+                >
+                  <PopIcon />
+                  <span>Pop Stash</span>
+                </button>
+              </>
             )}
           </div>
         </div>

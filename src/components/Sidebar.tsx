@@ -11,7 +11,7 @@ import type {
 } from "../types";
 import AddDiffDialog, { type AddDiffRequest } from "./AddDiffDialog";
 import FormDialog from "./FormDialog";
-import { CloseIcon, LoadingIcon, PlusIcon, SettingsIcon } from "./Icons";
+import { CloseIcon, LoadingIcon, PlusIcon, SettingsIcon, PopIcon } from "./Icons";
 import "./Sidebar.css";
 
 interface Props {
@@ -20,6 +20,7 @@ interface Props {
   settingsActive?: boolean;
   refreshToken?: number;
   refreshCommandToken?: number;
+  onDiffsetsLoaded?: (diffsets: DiffSet[]) => void;
 }
 
 type DiffSetMeta = {
@@ -32,6 +33,7 @@ type DiffSetMeta = {
   cwd?: string;
   rev?: string;
   pr_type?: string;
+  stash_id?: string;
 };
 
 type DirectoryProvider = "git" | "p4";
@@ -50,6 +52,7 @@ export default function Sidebar({
   settingsActive = false,
   refreshToken = 0,
   refreshCommandToken = 0,
+  onDiffsetsLoaded,
 }: Props) {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [settings, setSettings] = useState<WorkspaceSettings>(EMPTY_SETTINGS);
@@ -77,8 +80,9 @@ export default function Sidebar({
       ? await api.refreshWorkspaceDiffsets(ws.workspace_id)
       : await api.listDiffsets(ws.workspace_id);
     setDiffsets(next);
+    onDiffsetsLoaded?.(next);
     return next;
-  }, []);
+  }, [onDiffsetsLoaded]);
 
   useEffect(() => {
     loadWorkspaceState().catch((err) => setError(String(err)));
@@ -153,7 +157,7 @@ export default function Sidebar({
     setError(null);
     setIsImporting(true);
     try {
-      let diffsetId: string;
+      let diffsetId: string = "";
       switch (request.kind) {
         case "gitWorking":
           diffsetId = await api.importGitWorkingTree(request.repoPath ?? "");
@@ -163,6 +167,9 @@ export default function Sidebar({
           break;
         case "gitPullRequest":
           diffsetId = await api.importGitPullRequest(request.repoPath ?? "", request.prId ?? "", request.targetBranch ?? "main", request.prTitle);
+          break;
+        case "gitStash":
+          diffsetId = await api.importGitStash(request.repoPath ?? "", request.stashId ?? "");
           break;
         case "p4Pending":
           diffsetId = await api.importP4Pending(request.change ?? "default", request.cwd);
@@ -365,6 +372,7 @@ export default function Sidebar({
         loadP4PendingChanges={(cwd) => api.listP4PendingChanges(cwd)}
         loadGitBranches={(repoPath) => api.listGitBranches(repoPath)}
         loadPullRequests={(repoPath) => api.getPullRequests(repoPath)}
+        loadGitStashes={(repoPath) => api.listGitStashes(repoPath)}
       />
 
       <FormDialog
@@ -488,6 +496,7 @@ function DiffSetRow({
 }) {
   const meta = parseMeta(diffset.source_meta_json);
   const isP4 = diffset.provider === "p4";
+  const isStash = diffset.kind === "gitStash";
   const count = meta.file_count ?? filediffs?.length;
   const fileLabels = useMemo(
     () =>
@@ -572,6 +581,7 @@ function statusLabel(diffset: DiffSet, meta: DiffSetMeta) {
   if (diffset.provider === "git") {
     if (diffset.kind === "gitCommit") return "Commit";
     if (diffset.kind === "gitPullRequest") return meta.pr_type ?? "PR";
+    if (diffset.kind === "gitStash") return "Stash";
     return "Working";
   }
   return diffset.source_type;
