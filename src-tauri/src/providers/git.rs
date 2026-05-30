@@ -222,13 +222,35 @@ pub fn list_git_stashes(repo_path: &str) -> Result<Vec<GitStashSummary>, String>
 
 pub fn pop_git_stash(repo_path: &str, stash_id: &str) -> Result<(), String> {
     crate::debugging::DebugLogger::new("scm").log(format!("pop_git_stash repo={} stash_id={}", repo_path, stash_id));
-    run_command("git", &["-C", repo_path, "stash", "pop", stash_id], None)?;
+    let mut cmd = std::process::Command::new("git");
+    cmd.args(&["-C", repo_path, "stash", "pop", stash_id]);
+    
+    let output = cmd.output().map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stdout.contains("CONFLICT") || stderr.contains("CONFLICT") || stdout.contains("Merge conflict") {
+            return Err("CONFLICT".to_string());
+        }
+        return Err(format!("git stash pop failed: {}\n{}", stderr.trim(), stdout.trim()));
+    }
     Ok(())
 }
 
 pub fn apply_git_stash(repo_path: &str, stash_id: &str) -> Result<(), String> {
     crate::debugging::DebugLogger::new("scm").log(format!("apply_git_stash repo={} stash_id={}", repo_path, stash_id));
-    run_command("git", &["-C", repo_path, "stash", "apply", stash_id], None)?;
+    let mut cmd = std::process::Command::new("git");
+    cmd.args(&["-C", repo_path, "stash", "apply", stash_id]);
+    
+    let output = cmd.output().map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stdout.contains("CONFLICT") || stderr.contains("CONFLICT") || stdout.contains("Merge conflict") {
+            return Err("CONFLICT".to_string());
+        }
+        return Err(format!("git stash apply failed: {}\n{}", stderr.trim(), stdout.trim()));
+    }
     Ok(())
 }
 

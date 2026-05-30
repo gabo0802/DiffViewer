@@ -20,7 +20,6 @@ import "./components/Tabs.css";
 const SIDEBAR_WIDTH_KEY = "diffviewer.sidebarWidth";
 const EDITOR_PREFERENCES_KEY = "diffviewer.editorPreferences";
 const THEME_KEY = "diffviewer.theme";
-
 export interface ToastMessage {
   id: string;
   type: "error" | "success" | "info";
@@ -161,7 +160,7 @@ export default function App() {
 
   const handlePopStash = async () => {
     if (!currentDiffset) return;
-    
+
     const meta = JSON.parse(currentDiffset.source_meta_json || "{}");
     if (!meta.repo_path || !meta.stash_id) return;
 
@@ -171,8 +170,13 @@ export default function App() {
       closeCurrentSelection();
       requestSidebarRefresh();
     } catch (err) {
-      console.error("[Stash] Pop Error:", err);
-      showToast("error", `Failed to pop stash: ${err}`);
+      if (String(err).includes("CONFLICT")) {
+        showToast("info", "Merge conflicts detected. Please resolve them in the IDE.", false);
+        requestSidebarRefresh();
+      } else {
+        console.error("[Stash] Pop Error:", err);
+        showToast("error", `Failed to pop stash: ${err}`);
+      }
     }
   };
 
@@ -186,8 +190,13 @@ export default function App() {
       await api.applyGitStash(meta.repo_path, meta.stash_id);
       requestSidebarRefresh();
     } catch (err) {
-      console.error("[Stash] Apply Error:", err);
-      showToast("error", `Failed to apply stash: ${err}`);
+      if (String(err).includes("CONFLICT")) {
+        showToast("info", "Merge conflicts detected. Please resolve them in the IDE.", false);
+        requestSidebarRefresh();
+      } else {
+        console.error("[Stash] Apply Error:", err);
+        showToast("error", `Failed to apply stash: ${err}`);
+      }
     }
   };
 
@@ -306,9 +315,8 @@ export default function App() {
           {tabs.map((fd) => (
             <div
               key={fd.filediff_id}
-              className={`tab ${
-                activeWorkspaceView === "diff" && fd.filediff_id === activeTab ? "tab-active" : ""
-              } ${selectedTabIds.includes(fd.filediff_id) ? "tab-selected" : ""}`}
+              className={`tab ${activeWorkspaceView === "diff" && fd.filediff_id === activeTab ? "tab-active" : ""
+                } ${selectedTabIds.includes(fd.filediff_id) ? "tab-selected" : ""}`}
               onClick={(event) => {
                 if (event.ctrlKey || event.metaKey) {
                   event.preventDefault();
@@ -398,11 +406,10 @@ export default function App() {
         </div>
 
         <div
-          className={`workspace-shell ${
-            activeWorkspaceView === "diff" && mergeVisible && currentFd
-              ? "workspace-shell-merge"
-              : ""
-          }`}
+          className={`workspace-shell ${activeWorkspaceView === "diff" && mergeVisible && currentFd
+            ? "workspace-shell-merge"
+            : ""
+            }`}
         >
           <div className="editor-area">
             {activeWorkspaceView === "settings" ? (
