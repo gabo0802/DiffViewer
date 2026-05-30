@@ -173,7 +173,17 @@ pub fn import_git_stash(
         None,
     ).unwrap_or_else(|_| stash_id.to_string());
     
-    let title = format!("{}: {}", stash_id, message.trim());
+    let mut display_msg = message.trim().to_string();
+    if display_msg.starts_with("On ") {
+        display_msg.replace_range(0..3, "on ");
+    }
+    
+    let title = if stash_id.starts_with("stash@{") && stash_id.ends_with("}") {
+        let num = &stash_id[7..stash_id.len()-1];
+        format!("Stash #{} {}", num, display_msg)
+    } else {
+        format!("{}: {}", stash_id, display_msg)
+    };
 
     import_unified_diff_text(
         conn,
@@ -212,9 +222,22 @@ pub fn list_git_stashes(repo_path: &str) -> Result<Vec<GitStashSummary>, String>
             if stash_id.is_empty() {
                 return None;
             }
+            
+            let mut display_msg = message.to_string();
+            if display_msg.starts_with("On ") {
+                display_msg.replace_range(0..3, "on ");
+            }
+            
+            let formatted_title = if stash_id.starts_with("stash@{") && stash_id.ends_with("}") {
+                let num = &stash_id[7..stash_id.len()-1];
+                format!("Stash #{} {}", num, display_msg)
+            } else {
+                format!("{}: {}", stash_id, display_msg)
+            };
+
             Some(GitStashSummary {
                 stash_id: stash_id.to_string(),
-                message: message.to_string(),
+                message: formatted_title,
             })
         })
         .collect())
