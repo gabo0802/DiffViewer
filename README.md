@@ -1,17 +1,53 @@
-# DiffViewer
+<div align="center">
+  <img src="src-tauri/icons/icon.png" width="128" />
+  <h1>DiffViewer</h1>
+  <p>A modern, lightning-fast desktop diff tool for Git, Perforce, patch files, and external two-file comparisons.</p>
+</div>
 
-DiffViewer is a Tauri + React desktop diff tool for Git, Perforce, patch files, and external two-file comparisons. The UI is built around Monaco editors, with Rust owning filesystem access, SCM commands, diff parsing, rendering, persistence, and merge-save behavior.
+---
 
-## Development
+## Screenshots
+
+| Diff Editor | Settings |
+|:---:|:---:|
+| <img src="src/assets/DiffEditor.png" width="400"/> | <img src="src/assets/SettingsTab.png" width="400"/> |
+| **Add Diff Dialog** | **Syntax Highlighting** |
+| <img src="src/assets/AddDiff.png" width="400"/> | <img src="src/assets/SyntaxHighlight.png" width="400"/> |
+
+## Features
+
+- **Multi-SCM Support:** Native integrations for Git and Perforce right out of the box.
+- **Advanced Diff Engine:** View changes across working trees, commits, pull requests, and stashes.
+- **Merge Editor:** Built-in merge conflict resolution tool for complex files.
+- **Custom Syntax Highlighting:** Configure custom file-extension mappings using built-in Monaco language support.
+- **High Performance:** Built on Tauri + React, leveraging a blazing-fast Rust backend for filesystem access and diff parsing.
+
+## Getting Started
+
+### Development
+
+Use `npm run tauri:dev` for flows that depend on Tauri commands or local filesystem access. Use `npm run dev` only for browser-only UI iteration.
 
 ```bash
 npm install
 npm run build
 cd src-tauri
 cargo test
+cd ..
+npm run tauri:dev
 ```
 
-Use `npm.cmd run tauri:dev` for flows that depend on Tauri commands or local filesystem access. Use `npm.cmd run dev` only for browser-only UI iteration.
+### Verification
+
+Before merging feature work, run:
+
+```bash
+cd src-tauri
+cargo test
+cd ..
+npm run typecheck
+npm run build
+```
 
 ## Architecture
 
@@ -25,16 +61,6 @@ Use `npm.cmd run tauri:dev` for flows that depend on Tauri commands or local fil
 - `src/hooks/` contains reusable React state and coordination hooks.
 - `src/diffDomain.ts` centralizes frontend parsing for backend JSON fields.
 
-## Verification
+## License
 
-Before merging feature work, run:
-
-```bash
-cd src-tauri
-cargo test
-cd ..
-npm.cmd run typecheck
-npm.cmd run build
-```
-
-The frontend build currently emits Vite's CJS API deprecation warning from the toolchain, but the build succeeds.
+This project is open-source and available under the **MIT License**.
