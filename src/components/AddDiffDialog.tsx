@@ -480,7 +480,7 @@ export default function AddDiffDialog({
                   >
                     {gitStashes.map((stash) => (
                       <option key={stash.stashId} value={stash.stashId}>
-                        {stash.stashId}: {stash.message}
+                        {stash.message}
                       </option>
                     ))}
                   </select>
