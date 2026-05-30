@@ -38,6 +38,7 @@ export default function App() {
   const [nextHunkToken, setNextHunkToken] = useState(0);
   const [appDiffsets, setAppDiffsets] = useState<DiffSet[]>([]);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [isStashing, setIsStashing] = useState(false);
   const [editorPreferences, setEditorPreferences] = useState<EditorPreferences>(() =>
     loadEditorPreferences(EDITOR_PREFERENCES_KEY)
   );
@@ -159,11 +160,12 @@ export default function App() {
   const isStash = currentDiffset?.kind === "gitStash";
 
   const handlePopStash = async () => {
-    if (!currentDiffset) return;
+    if (!currentDiffset || isStashing) return;
 
     const meta = JSON.parse(currentDiffset.source_meta_json || "{}");
     if (!meta.repo_path || !meta.stash_id) return;
 
+    setIsStashing(true);
     try {
       await api.popGitStash(meta.repo_path, meta.stash_id);
       await api.deleteDiffset(currentDiffset.diffset_id);
@@ -171,21 +173,24 @@ export default function App() {
       requestSidebarRefresh();
     } catch (err) {
       if (String(err).includes("CONFLICT")) {
-        showToast("info", "Merge conflicts detected. Please resolve them in the IDE.", false);
+        showToast("info", "Merge conflicts detected, applied stash but did not pop. Please resolve them in the IDE.", false);
         requestSidebarRefresh();
       } else {
         console.error("[Stash] Pop Error:", err);
         showToast("error", `Failed to pop stash: ${err}`);
       }
+    } finally {
+      setIsStashing(false);
     }
   };
 
   const handleApplyStash = async () => {
-    if (!currentDiffset) return;
+    if (!currentDiffset || isStashing) return;
 
     const meta = JSON.parse(currentDiffset.source_meta_json || "{}");
     if (!meta.repo_path || !meta.stash_id) return;
 
+    setIsStashing(true);
     try {
       await api.applyGitStash(meta.repo_path, meta.stash_id);
       requestSidebarRefresh();
@@ -197,6 +202,8 @@ export default function App() {
         console.error("[Stash] Apply Error:", err);
         showToast("error", `Failed to apply stash: ${err}`);
       }
+    } finally {
+      setIsStashing(false);
     }
   };
 
@@ -383,20 +390,22 @@ export default function App() {
               <>
                 <button
                   type="button"
-                  className="btn-merge-toggle button-with-icon"
+                  className="toolbar-button toolbar-button-with-icon"
                   onClick={handleApplyStash}
                   title="Apply Stash"
+                  disabled={isStashing}
                 >
-                  <PlusIcon />
+                  {isStashing ? <LoadingIcon className="button-icon-spin" /> : <PlusIcon />}
                   <span>Apply Stash</span>
                 </button>
                 <button
                   type="button"
-                  className="btn-merge-toggle button-with-icon"
+                  className="toolbar-button toolbar-button-with-icon"
                   onClick={handlePopStash}
                   title="Pop Stash"
+                  disabled={isStashing}
                 >
-                  <PopIcon />
+                  {isStashing ? <LoadingIcon className="button-icon-spin" /> : <PopIcon />}
                   <span>Pop Stash</span>
                 </button>
               </>
