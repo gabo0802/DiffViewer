@@ -21,6 +21,13 @@ const SIDEBAR_WIDTH_KEY = "diffviewer.sidebarWidth";
 const EDITOR_PREFERENCES_KEY = "diffviewer.editorPreferences";
 const THEME_KEY = "diffviewer.theme";
 
+export interface ToastMessage {
+  id: string;
+  type: "error" | "success" | "info";
+  message: string;
+  dismissible?: boolean;
+}
+
 export default function App() {
   const [mergeVisible, setMergeVisible] = useState(false);
   const [mergeSaveCommandToken, setMergeSaveCommandToken] = useState(0);
@@ -31,10 +38,23 @@ export default function App() {
   const [previousHunkToken, setPreviousHunkToken] = useState(0);
   const [nextHunkToken, setNextHunkToken] = useState(0);
   const [appDiffsets, setAppDiffsets] = useState<DiffSet[]>([]);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [editorPreferences, setEditorPreferences] = useState<EditorPreferences>(() =>
     loadEditorPreferences(EDITOR_PREFERENCES_KEY)
   );
   const [theme, setTheme] = usePersistentState<ThemeMode>(THEME_KEY, readStoredTheme);
+
+  const showToast = useCallback((type: ToastMessage["type"], message: string, dismissible = true) => {
+    const id = Date.now().toString() + Math.random().toString();
+    setToasts((current) => [...current, { id, type, message, dismissible }]);
+    setTimeout(() => {
+      setToasts((current) => current.filter((t) => t.id !== id));
+    }, 5000);
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((current) => current.filter((t) => t.id !== id));
+  }, []);
   const {
     tabs,
     setTabs,
@@ -152,6 +172,7 @@ export default function App() {
       requestSidebarRefresh();
     } catch (err) {
       console.error("[Stash] Pop Error:", err);
+      showToast("error", `Failed to pop stash: ${err}`);
     }
   };
 
@@ -166,6 +187,7 @@ export default function App() {
       requestSidebarRefresh();
     } catch (err) {
       console.error("[Stash] Apply Error:", err);
+      showToast("error", `Failed to apply stash: ${err}`);
     }
   };
 
@@ -426,6 +448,26 @@ export default function App() {
           )}
         </div>
       </main>
+
+      {toasts.length > 0 && (
+        <div className="toast-container">
+          {toasts.map((t) => (
+            <div key={t.id} className={`toast toast-${t.type}`}>
+              <div className="toast-content">{t.message}</div>
+              {t.dismissible && (
+                <button
+                  type="button"
+                  className="toast-close-btn"
+                  onClick={() => dismissToast(t.id)}
+                  title="Dismiss"
+                >
+                  <CloseIcon />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
