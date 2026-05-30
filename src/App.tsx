@@ -315,8 +315,7 @@ export default function App() {
           {tabs.map((fd) => (
             <div
               key={fd.filediff_id}
-              className={`tab ${activeWorkspaceView === "diff" && fd.filediff_id === activeTab ? "tab-active" : ""
-                } ${selectedTabIds.includes(fd.filediff_id) ? "tab-selected" : ""}`}
+              className={`tab ${activeWorkspaceView === "diff" && fd.filediff_id === activeTab ? "tab-active" : ""} ${selectedTabIds.includes(fd.filediff_id) ? "tab-selected" : ""}`}
               onClick={(event) => {
                 if (event.ctrlKey || event.metaKey) {
                   event.preventDefault();
