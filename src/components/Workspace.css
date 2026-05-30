@@ -367,13 +367,26 @@
 .dialog-mode-button {
   padding: 10px 12px;
   background: var(--bg);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.dialog-segment-button:hover,
+.dialog-mode-button:hover {
+  background: color-mix(in srgb, var(--text) 5%, var(--bg));
   color: var(--text);
 }
 
 .dialog-segment-button-active,
 .dialog-mode-button-active {
-  background: color-mix(in srgb, var(--accent) 18%, var(--panel-bg));
-  border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 .dialog-mode-list {
