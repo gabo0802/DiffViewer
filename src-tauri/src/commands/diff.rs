@@ -18,9 +18,9 @@ pub fn compare_two_files(
     left_path: String,
     right_path: String,
 ) -> Result<String, String> {
-    let conn = state.db.lock().map_err(|err| err.to_string())?;
+    let mut conn = state.db.lock().map_err(|err| err.to_string())?;
     let workspace_id = state.current_workspace_id()?;
-    workspace_controller::compare_two_files(&conn, &workspace_id, &left_path, &right_path, None)
+    workspace_controller::compare_two_files(&mut *conn, &workspace_id, &left_path, &right_path, None, None)
 }
 
 #[tauri::command]
@@ -197,4 +197,31 @@ pub fn mark_reviewed(
             updated_at: chrono::Utc::now().timestamp(),
         },
     )
+}
+
+#[tauri::command]
+pub fn import_git_stash(
+    state: State<AppState>,
+    repo_path: String,
+    stash_id: String,
+) -> Result<String, String> {
+    let conn = state.db.lock().map_err(|err| err.to_string())?;
+    let workspace_id = state.current_workspace_id()?;
+    let target = ImportTarget::GitStash { repo_path, stash_id };
+    GitProvider.import_target(&conn, &workspace_id, &target)
+}
+
+#[tauri::command]
+pub fn list_git_stashes(repo_path: String) -> Result<Vec<crate::providers::git::GitStashSummary>, String> {
+    crate::providers::git::list_git_stashes(&repo_path)
+}
+
+#[tauri::command]
+pub fn pop_git_stash(repo_path: String, stash_id: String) -> Result<(), String> {
+    crate::providers::git::pop_git_stash(&repo_path, &stash_id)
+}
+
+#[tauri::command]
+pub fn apply_git_stash(repo_path: String, stash_id: String) -> Result<(), String> {
+    crate::providers::git::apply_git_stash(&repo_path, &stash_id)
 }

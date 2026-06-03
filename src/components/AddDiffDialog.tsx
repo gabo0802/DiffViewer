@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type {
   GitCommitSummary,
+  GitStashSummary,
   P4PendingChangeSummary,
   SavedWorkspaceLocation,
 } from "../types";
@@ -10,6 +11,7 @@ export type AddDiffImportKind =
   | "gitWorking"
   | "gitCommit"
   | "gitPullRequest"
+  | "gitStash"
   | "p4Pending"
   | "p4Shelved"
   | "p4Submitted";
@@ -23,6 +25,7 @@ export interface AddDiffRequest {
   prId?: string;
   targetBranch?: string;
   prTitle?: string;
+  stashId?: string;
 }
 
 interface Props {
@@ -39,6 +42,7 @@ interface Props {
   loadP4PendingChanges: (cwd: string) => Promise<P4PendingChangeSummary[]>;
   loadGitBranches: (repoPath: string) => Promise<string[]>;
   loadPullRequests: (repoPath: string) => Promise<import("../types").PullRequestSummary[]>;
+  loadGitStashes: (repoPath: string) => Promise<GitStashSummary[]>;
 }
 
 type ProviderMode = "git" | "p4";
@@ -58,13 +62,14 @@ export default function AddDiffDialog({
   loadP4PendingChanges,
   loadGitBranches,
   loadPullRequests,
+  loadGitStashes,
 }: Props) {
   const defaultProvider = useMemo<ProviderMode>(() => {
     if (selectedP4LocationId) return "p4";
     return "git";
   }, [selectedP4LocationId]);
   const [provider, setProvider] = useState<ProviderMode>(defaultProvider);
-  const [gitMode, setGitMode] = useState<"gitWorking" | "gitCommit" | "gitPullRequest">("gitWorking");
+  const [gitMode, setGitMode] = useState<"gitWorking" | "gitCommit" | "gitPullRequest" | "gitStash">("gitWorking");
   const [p4Mode, setP4Mode] = useState<"p4Pending" | "p4Submitted" | "p4Shelved">("p4Pending");
   const [change, setChange] = useState("default");
   const [rev, setRev] = useState("HEAD");
@@ -74,6 +79,8 @@ export default function AddDiffDialog({
   const [prId, setPrId] = useState("");
   const [targetBranch, setTargetBranch] = useState("main");
   const [pullRequests, setPullRequests] = useState<import("../types").PullRequestSummary[]>([]);
+  const [stashId, setStashId] = useState("");
+  const [gitStashes, setGitStashes] = useState<GitStashSummary[]>([]);
   const [pendingChanges, setPendingChanges] = useState<P4PendingChangeSummary[]>([]);
   const [lookupState, setLookupState] = useState<LookupState>("idle");
   const [lookupError, setLookupError] = useState<string | null>(null);
@@ -91,6 +98,8 @@ export default function AddDiffDialog({
     setPrId("");
     setTargetBranch("main");
     setPullRequests([]);
+    setStashId("");
+    setGitStashes([]);
     setPendingChanges([]);
     setLookupState("idle");
     setLookupError(null);
@@ -161,6 +170,18 @@ export default function AddDiffDialog({
           return;
         }
 
+        if (provider === "git" && gitMode === "gitStash" && activePath) {
+          setLookupState("loading");
+          const stashes = await loadGitStashes(activePath);
+          if (cancelled) return;
+          setGitStashes(stashes);
+          if (stashes.length > 0) {
+            setStashId(stashes[0].stashId);
+          }
+          setLookupState("ready");
+          return;
+        }
+
         setLookupState("idle");
       } catch (error) {
         if (cancelled) return;
@@ -180,6 +201,7 @@ export default function AddDiffDialog({
     loadGitBranches,
     loadGitCommits,
     loadPullRequests,
+    loadGitStashes,
     loadP4PendingChanges,
     p4Mode,
     provider,
@@ -196,6 +218,7 @@ export default function AddDiffDialog({
     (activeKind === "gitWorking" ||
       (activeKind === "gitCommit" && !!rev.trim()) ||
       (activeKind === "gitPullRequest" && !!prId.trim() && !!targetBranch.trim()) ||
+      (activeKind === "gitStash" && !!stashId.trim()) ||
       ((activeKind === "p4Pending" || activeKind === "p4Submitted" || activeKind === "p4Shelved") && !!change.trim()));
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -213,6 +236,10 @@ export default function AddDiffDialog({
     if (activeKind === "gitPullRequest") {
       const prTitle = pullRequests.find((pr) => pr.id === prId.trim())?.title;
       await onSubmit({ kind: activeKind, repoPath: activePath, prId: prId.trim(), targetBranch: targetBranch.trim(), prTitle });
+      return;
+    }
+    if (activeKind === "gitStash") {
+      await onSubmit({ kind: activeKind, repoPath: activePath, stashId: stashId.trim() });
       return;
     }
 
@@ -289,7 +316,7 @@ export default function AddDiffDialog({
                     <option key={item.change} value={item.change}>
                       {item.isDefault
                         ? "default"
-                        : `CL ${item.change} - ${item.description}`}
+                        : `${item.description}`}
                     </option>
                   ))}
                   {pendingChanges.length === 0 && <option value="default">default</option>}
@@ -331,6 +358,11 @@ export default function AddDiffDialog({
                 active={gitMode === "gitPullRequest"}
                 label="Pull Request"
                 onClick={() => setGitMode("gitPullRequest")}
+              />
+              <ModeButton
+                active={gitMode === "gitStash"}
+                label="Stash"
+                onClick={() => setGitMode("gitStash")}
               />
             </div>
             <SavedLocationPicker
@@ -434,6 +466,32 @@ export default function AddDiffDialog({
                       <option value={targetBranch}>{targetBranch}</option>
                     )}
                   </select>
+                </label>
+              </>
+            )}
+            {gitMode === "gitStash" && (
+              <>
+                <label className="dialog-field">
+                  <span>Git Stashes</span>
+                  <select
+                    value={stashId}
+                    onChange={(event) => setStashId(event.target.value)}
+                    disabled={!activePath || lookupState === "loading"}
+                  >
+                    {gitStashes.map((stash) => (
+                      <option key={stash.stashId} value={stash.stashId}>
+                        {stash.message}
+                      </option>
+                    ))}
+                  </select>
+                  <LookupStatus
+                    activePath={activePath}
+                    lookupError={lookupError}
+                    lookupState={lookupState}
+                    loadingLabel="Loading git stashes..."
+                    emptyLabel="No stashes found."
+                    hasResults={gitStashes.length > 0}
+                  />
                 </label>
               </>
             )}

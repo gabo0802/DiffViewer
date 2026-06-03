@@ -367,13 +367,26 @@
 .dialog-mode-button {
   padding: 10px 12px;
   background: var(--bg);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.dialog-segment-button:hover,
+.dialog-mode-button:hover {
+  background: color-mix(in srgb, var(--text) 5%, var(--bg));
   color: var(--text);
 }
 
 .dialog-segment-button-active,
 .dialog-mode-button-active {
-  background: color-mix(in srgb, var(--accent) 18%, var(--panel-bg));
-  border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 .dialog-mode-list {
@@ -423,3 +436,83 @@
 .add-diff-dialog {
   width: min(560px, 100%);
 }
+
+.toast-container {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--panel-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px 20px;
+  font-size: 13px;
+  line-height: 1.5;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  pointer-events: auto;
+  animation: toast-slide 5s ease-in-out forwards;
+  max-width: 400px;
+  word-break: break-word;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.toast-content {
+  flex: 1;
+}
+
+.toast-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin: -4px -8px -4px 0;
+}
+
+.toast-close-btn:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.toast-error {
+  border-left: 4px solid var(--danger);
+}
+
+.toast-success {
+  border-left: 4px solid #2ea043;
+}
+
+@keyframes toast-slide {
+  0% {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  5% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  95% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+}
+

@@ -8,6 +8,7 @@ import {
 } from "../editorPreferences";
 import { CloseIcon, PlusIcon } from "./Icons";
 import * as api from "../api";
+import packageJson from "../../package.json";
 import "./SettingsPanel.css";
 
 const isMac = navigator.userAgent.toLowerCase().includes("mac");
@@ -61,6 +62,7 @@ export default function SettingsPanel({
   const [gitlabPat, setGitlabPat] = useState("");
   const [gitlabHostUrl, setGitlabHostUrl] = useState("");
   const [isSavingScm, setIsSavingScm] = useState(false);
+  const [appVersion, setAppVersion] = useState(packageJson.version);
 
   React.useEffect(() => {
     api.getCurrentWorkspaceSettings().then((settings) => {
@@ -133,10 +135,6 @@ export default function SettingsPanel({
       <div className="settings-header">
         <div>
           <h2 className="settings-title">Settings</h2>
-          <p className="settings-description">
-            Keyboard shortcuts are fixed for now. Syntax overrides apply when
-            the editor language is set to auto detect.
-          </p>
         </div>
       </div>
 
@@ -306,6 +304,19 @@ export default function SettingsPanel({
         <div className="settings-helper-block">
           Stretch goal: custom tokenizer uploads are not wired yet, but this tab
           now gives us a stable place to add them later.
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <div className="settings-section-header">
+          <h3>About</h3>
+        </div>
+        <div className="settings-helper-block" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <span><strong>Version:</strong> v{appVersion}</span>
+          <span><strong>Author:</strong> Gabriel Castejon</span>
+          <span>
+            <strong>License:</strong> MIT License.
+          </span>
         </div>
       </section>
     </div>

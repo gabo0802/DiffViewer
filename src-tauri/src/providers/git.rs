@@ -20,6 +20,13 @@ pub struct GitCommitSummary {
     pub relative_time: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitStashSummary {
+    pub stash_id: String,
+    pub message: String,
+}
+
 pub struct GitProvider;
 
 impl ScmProvider for GitProvider {
@@ -37,6 +44,9 @@ impl ScmProvider for GitProvider {
             }
             ImportTarget::GitPullRequest { repo_path, pr_id, target_branch, pr_title } => {
                 import_git_pull_request(conn, workspace_id, repo_path, pr_id, target_branch, pr_title.as_deref())
+            }
+            ImportTarget::GitStash { repo_path, stash_id } => {
+                import_git_stash(conn, workspace_id, repo_path, stash_id)
             }
             _ => Err(format!("Unsupported target for GitProvider: {:?}", target)),
         }
@@ -135,6 +145,137 @@ pub fn import_git_commit(
     )
 }
 
+pub fn import_git_stash(
+    conn: &Connection,
+    workspace_id: &str,
+    repo_path: &str,
+    stash_id: &str,
+) -> Result<String, String> {
+    let output = run_command(
+        "git",
+        &[
+            "-C",
+            repo_path,
+            "stash",
+            "show",
+            "-p",
+            "--no-color",
+            "--no-ext-diff",
+            "--unified=3",
+            stash_id,
+        ],
+        None,
+    )?;
+
+    let message = run_command(
+        "git",
+        &["-C", repo_path, "log", "-1", "--format=%s", stash_id],
+        None,
+    ).unwrap_or_else(|_| stash_id.to_string());
+    
+    let mut display_msg = message.trim().to_string();
+    if display_msg.starts_with("On ") {
+        display_msg.replace_range(0..3, "on ");
+    }
+    
+    let title = if stash_id.starts_with("stash@{") && stash_id.ends_with("}") {
+        let num = &stash_id[7..stash_id.len()-1];
+        format!("Stash #{} {}", num, display_msg)
+    } else {
+        format!("{}: {}", stash_id, display_msg)
+    };
+
+    import_unified_diff_text(
+        conn,
+        workspace_id,
+        &output,
+        DiffSetDescriptor {
+            title,
+            source_type: "Git".to_string(),
+            provider: "git".to_string(),
+            kind: "gitStash".to_string(),
+            source_meta: serde_json::json!({
+                "repo_path": repo_path,
+                "stash_id": stash_id,
+                "file_count": unified_parser::parse_unified_diff(&output).len()
+            }),
+            left_label: format!("{}^", stash_id),
+            right_label: stash_id.to_string(),
+            write_target_mode: WriteTargetMode::GitCommit {
+                repo_path: repo_path.to_string(),
+                rev: stash_id.to_string(),
+            },
+        },
+        None,
+    )
+}
+
+pub fn list_git_stashes(repo_path: &str) -> Result<Vec<GitStashSummary>, String> {
+    let output = run_command("git", &["-C", repo_path, "stash", "list", "--format=%gd%x1f%gs"], None)?;
+    
+    Ok(output
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.split('\u{1f}');
+            let stash_id = parts.next()?.trim();
+            let message = parts.next()?.trim();
+            if stash_id.is_empty() {
+                return None;
+            }
+            
+            let mut display_msg = message.to_string();
+            if display_msg.starts_with("On ") {
+                display_msg.replace_range(0..3, "on ");
+            }
+            
+            let formatted_title = if stash_id.starts_with("stash@{") && stash_id.ends_with("}") {
+                let num = &stash_id[7..stash_id.len()-1];
+                format!("Stash #{} {}", num, display_msg)
+            } else {
+                format!("{}: {}", stash_id, display_msg)
+            };
+
+            Some(GitStashSummary {
+                stash_id: stash_id.to_string(),
+                message: formatted_title,
+            })
+        })
+        .collect())
+}
+
+pub fn pop_git_stash(repo_path: &str, stash_id: &str) -> Result<(), String> {
+    crate::debugging::DebugLogger::new("scm").log(format!("pop_git_stash repo={} stash_id={}", repo_path, stash_id));
+    let mut cmd = std::process::Command::new("git");
+    cmd.args(&["-C", repo_path, "stash", "pop", stash_id]);
+    
+    let output = cmd.output().map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stdout.contains("CONFLICT") || stderr.contains("CONFLICT") || stdout.contains("Merge conflict") {
+            return Err("CONFLICT".to_string());
+        }
+        return Err(format!("git stash pop failed: {}\n{}", stderr.trim(), stdout.trim()));
+    }
+    Ok(())
+}
+
+pub fn apply_git_stash(repo_path: &str, stash_id: &str) -> Result<(), String> {
+    crate::debugging::DebugLogger::new("scm").log(format!("apply_git_stash repo={} stash_id={}", repo_path, stash_id));
+    let mut cmd = std::process::Command::new("git");
+    cmd.args(&["-C", repo_path, "stash", "apply", stash_id]);
+    
+    let output = cmd.output().map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stdout.contains("CONFLICT") || stderr.contains("CONFLICT") || stdout.contains("Merge conflict") {
+            return Err("CONFLICT".to_string());
+        }
+        return Err(format!("git stash apply failed: {}\n{}", stderr.trim(), stdout.trim()));
+    }
+    Ok(())
+}
 
 pub fn list_git_commits(repo_path: &str, limit: usize, branch: Option<&str>) -> Result<Vec<GitCommitSummary>, String> {
     let max_count = limit.max(1).min(100).to_string();

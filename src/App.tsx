@@ -4,7 +4,7 @@ import Sidebar from "./components/Sidebar";
 import DiffViewer from "./components/DiffViewer";
 import MergePanel from "./components/MergePanel";
 import SettingsPanel from "./components/SettingsPanel";
-import { CloseIcon, EditIcon, ThemeIcon } from "./components/Icons";
+import { CloseIcon, EditIcon, ThemeIcon, PopIcon, PlusIcon, LoadingIcon } from "./components/Icons";
 import {
   loadEditorPreferences,
   type EditorPreferences,
@@ -20,6 +20,12 @@ import "./components/Tabs.css";
 const SIDEBAR_WIDTH_KEY = "diffviewer.sidebarWidth";
 const EDITOR_PREFERENCES_KEY = "diffviewer.editorPreferences";
 const THEME_KEY = "diffviewer.theme";
+export interface ToastMessage {
+  id: string;
+  type: "error" | "success" | "info";
+  message: string;
+  dismissible?: boolean;
+}
 
 export default function App() {
   const [mergeVisible, setMergeVisible] = useState(false);
@@ -30,10 +36,25 @@ export default function App() {
   const [selectedTabIds, setSelectedTabIds] = useState<string[]>([]);
   const [previousHunkToken, setPreviousHunkToken] = useState(0);
   const [nextHunkToken, setNextHunkToken] = useState(0);
+  const [appDiffsets, setAppDiffsets] = useState<DiffSet[]>([]);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [isStashing, setIsStashing] = useState(false);
   const [editorPreferences, setEditorPreferences] = useState<EditorPreferences>(() =>
     loadEditorPreferences(EDITOR_PREFERENCES_KEY)
   );
   const [theme, setTheme] = usePersistentState<ThemeMode>(THEME_KEY, readStoredTheme);
+
+  const showToast = useCallback((type: ToastMessage["type"], message: string, dismissible = true) => {
+    const id = Date.now().toString() + Math.random().toString();
+    setToasts((current) => [...current, { id, type, message, dismissible }]);
+    setTimeout(() => {
+      setToasts((current) => current.filter((t) => t.id !== id));
+    }, 5000);
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((current) => current.filter((t) => t.id !== id));
+  }, []);
   const {
     tabs,
     setTabs,
@@ -134,6 +155,57 @@ export default function App() {
       prev.map((tabId) => (tabId === currentFd.filediff_id ? replacement.filediff_id : tabId))
     );
   }, [currentFd, setActiveTab, setTabs]);
+
+  const currentDiffset = appDiffsets.find((ds) => ds.diffset_id === currentFd?.diffset_id);
+  const isStash = currentDiffset?.kind === "gitStash";
+
+  const handlePopStash = async () => {
+    if (!currentDiffset || isStashing) return;
+
+    const meta = JSON.parse(currentDiffset.source_meta_json || "{}");
+    if (!meta.repo_path || !meta.stash_id) return;
+
+    setIsStashing(true);
+    try {
+      await api.popGitStash(meta.repo_path, meta.stash_id);
+      await api.deleteDiffset(currentDiffset.diffset_id);
+      closeCurrentSelection();
+      requestSidebarRefresh();
+    } catch (err) {
+      if (String(err).includes("CONFLICT")) {
+        showToast("info", "Merge conflicts detected, applied stash but did not pop. Please resolve them in the IDE.", false);
+        requestSidebarRefresh();
+      } else {
+        console.error("[Stash] Pop Error:", err);
+        showToast("error", `Failed to pop stash: ${err}`);
+      }
+    } finally {
+      setIsStashing(false);
+    }
+  };
+
+  const handleApplyStash = async () => {
+    if (!currentDiffset || isStashing) return;
+
+    const meta = JSON.parse(currentDiffset.source_meta_json || "{}");
+    if (!meta.repo_path || !meta.stash_id) return;
+
+    setIsStashing(true);
+    try {
+      await api.applyGitStash(meta.repo_path, meta.stash_id);
+      requestSidebarRefresh();
+    } catch (err) {
+      if (String(err).includes("CONFLICT")) {
+        showToast("info", "Merge conflicts detected. Please resolve them in the IDE.", false);
+        requestSidebarRefresh();
+      } else {
+        console.error("[Stash] Apply Error:", err);
+        showToast("error", `Failed to apply stash: ${err}`);
+      }
+    } finally {
+      setIsStashing(false);
+    }
+  };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -236,6 +308,7 @@ export default function App() {
           settingsActive={activeWorkspaceView === "settings"}
           refreshToken={sidebarRefreshToken}
           refreshCommandToken={sidebarRefreshCommandToken}
+          onDiffsetsLoaded={setAppDiffsets}
         />
       </div>
       <div
@@ -249,9 +322,7 @@ export default function App() {
           {tabs.map((fd) => (
             <div
               key={fd.filediff_id}
-              className={`tab ${
-                activeWorkspaceView === "diff" && fd.filediff_id === activeTab ? "tab-active" : ""
-              } ${selectedTabIds.includes(fd.filediff_id) ? "tab-selected" : ""}`}
+              className={`tab ${activeWorkspaceView === "diff" && fd.filediff_id === activeTab ? "tab-active" : ""} ${selectedTabIds.includes(fd.filediff_id) ? "tab-selected" : ""}`}
               onClick={(event) => {
                 if (event.ctrlKey || event.metaKey) {
                   event.preventDefault();
@@ -301,7 +372,7 @@ export default function App() {
               <ThemeIcon mode={theme} />
               <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
             </button>
-            {currentFd && canEditCurrent && (
+            {currentFd && canEditCurrent && !isStash && (
               <button
                 type="button"
                 className="btn-merge-toggle button-with-icon"
@@ -315,15 +386,38 @@ export default function App() {
                 <span>{mergeVisible ? "Hide Merge" : "Edit / Resolve"}</span>
               </button>
             )}
+            {currentFd && isStash && (
+              <>
+                <button
+                  type="button"
+                  className="toolbar-button toolbar-button-with-icon"
+                  onClick={handleApplyStash}
+                  title="Apply Stash"
+                  disabled={isStashing}
+                >
+                  {isStashing ? <LoadingIcon className="button-icon-spin" /> : <PlusIcon />}
+                  <span>Apply Stash</span>
+                </button>
+                <button
+                  type="button"
+                  className="toolbar-button toolbar-button-with-icon"
+                  onClick={handlePopStash}
+                  title="Pop Stash"
+                  disabled={isStashing}
+                >
+                  {isStashing ? <LoadingIcon className="button-icon-spin" /> : <PopIcon />}
+                  <span>Pop Stash</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
 
         <div
-          className={`workspace-shell ${
-            activeWorkspaceView === "diff" && mergeVisible && currentFd
-              ? "workspace-shell-merge"
-              : ""
-          }`}
+          className={`workspace-shell ${activeWorkspaceView === "diff" && mergeVisible && currentFd
+            ? "workspace-shell-merge"
+            : ""
+            }`}
         >
           <div className="editor-area">
             {activeWorkspaceView === "settings" ? (
@@ -369,6 +463,26 @@ export default function App() {
           )}
         </div>
       </main>
+
+      {toasts.length > 0 && (
+        <div className="toast-container">
+          {toasts.map((t) => (
+            <div key={t.id} className={`toast toast-${t.type}`}>
+              <div className="toast-content">{t.message}</div>
+              {t.dismissible && (
+                <button
+                  type="button"
+                  className="toast-close-btn"
+                  onClick={() => dismissToast(t.id)}
+                  title="Dismiss"
+                >
+                  <CloseIcon />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

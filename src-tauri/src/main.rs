@@ -14,20 +14,47 @@ mod store;
 mod workspace_controller;
 
 use app_state::AppState;
+use tauri::{Emitter, Manager, UserAttentionType};
+
+fn focus_and_highlight_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.request_user_attention(Some(UserAttentionType::Informational));
+        let _ = window.set_focus();
+    }
+}
 
 fn main() {
     let conn = store::open_db().expect("Failed to open database");
     let inbox = store::ensure_inbox(&conn).expect("Failed to ensure Inbox workspace");
     let current_workspace_id = inbox.workspace_id.clone();
 
+    let app_state = AppState::new(conn, current_workspace_id);
+
     let args: Vec<String> = std::env::args().collect();
     debugging::configure_from_args(&args);
-    if let Some(request) = open_request::parse_argv(&args) {
-        services::open_service::handle_startup_request(&conn, &current_workspace_id, request);
-    }
 
     tauri::Builder::default()
-        .manage(AppState::new(conn, current_workspace_id))
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            if let Some(request) = open_request::parse_argv(&argv) {
+                let state = app.state::<AppState>();
+                if let Err(err) = services::open_service::handle_open_request(&state, request) {
+                    eprintln!("Failed to handle single-instance open request: {}", err);
+                } else {
+                    focus_and_highlight_main_window(app);
+                    let _ = app.emit("refresh-workspace", ());
+                }
+            }
+        }))
+        .setup(move |app| {
+            if let Some(request) = open_request::parse_argv(&args) {
+                let state = app.state::<AppState>();
+                services::open_service::handle_startup_request(&state, request);
+            }
+            Ok(())
+        })
+        .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             commands::workspace::get_current_workspace,
             commands::workspace::get_current_workspace_settings,
@@ -50,6 +77,10 @@ fn main() {
             commands::diff::list_git_branches,
             commands::diff::get_pull_requests,
             commands::diff::import_git_pull_request,
+            commands::diff::import_git_stash,
+            commands::diff::list_git_stashes,
+            commands::diff::pop_git_stash,
+            commands::diff::apply_git_stash,
             commands::diff::list_p4_pending_changes,
             commands::diff::list_diffsets,
             commands::diff::list_filediffs,

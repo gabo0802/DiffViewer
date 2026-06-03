@@ -41,6 +41,11 @@ export interface GitCommitSummary {
   relativeTime: string;
 }
 
+export interface GitStashSummary {
+  stashId: string;
+  message: string;
+}
+
 export interface PullRequestSummary {
   id: string;
   title: string;

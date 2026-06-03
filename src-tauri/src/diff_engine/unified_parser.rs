@@ -365,8 +365,8 @@ Differences ...
     #[test]
     fn test_parse_p4_unified_diff_with_timestamps() {
         let patch = "\
---- //generic-depot/my-app/2027/dl/tools/config/src/config.env  2026-04-20 18:12:23.000000000 -0700
-+++ E:\\OnlineBranches\\my-project\\tools\\config\\src\\config.env\t2026-04-20 18:12:23.000000000 -0700
+--- //depot/projects/my-app/src/config.env  2026-04-20 18:12:23.000000000 -0700
++++ E:\\OnlineBranches\\my-project\\src\\config.env\t2026-04-20 18:12:23.000000000 -0700
 @@ -10,1 +10,1 @@
 -WEB_PORT=5000
 +WEB_PORT=22000
@@ -375,11 +375,11 @@ Differences ...
         assert_eq!(files.len(), 1);
         assert_eq!(
             files[0].old_path,
-            "//generic-depot/my-app/2027/dl/tools/config/src/config.env"
+            "//depot/projects/my-app/src/config.env"
         );
         assert_eq!(
             files[0].new_path,
-            "E:\\OnlineBranches\\my-project\\tools\\config\\src\\config.env"
+            "E:\\OnlineBranches\\my-project\\src\\config.env"
         );
         assert_eq!(files[0].hunks.len(), 1);
     }
