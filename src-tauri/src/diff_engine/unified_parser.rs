@@ -25,6 +25,7 @@ pub struct PatchFileDiff {
     pub new_path: String,
     pub hunks: Vec<Hunk>,
     pub status: String, // "modified" | "added" | "deleted" | "renamed"
+    pub is_binary: bool,
 }
 
 /// Parse a unified diff / patch string into a list of file diffs.
@@ -46,7 +47,7 @@ pub fn parse_unified_diff(patch: &str) -> Vec<PatchFileDiff> {
                 files.push(f);
             }
             current_file_from_p4_header = false;
-        } else if let Some((old_path, new_path)) = parse_p4_section_header(line) {
+        } else if let Some((old_path, new_path, is_binary)) = parse_p4_section_header(line) {
             if let Some(ref mut f) = current_file {
                 if let Some(h) = current_hunk.take() {
                     f.hunks.push(h);
@@ -60,6 +61,7 @@ pub fn parse_unified_diff(patch: &str) -> Vec<PatchFileDiff> {
                 new_path,
                 hunks: Vec::new(),
                 status: "modified".to_string(),
+                is_binary,
             });
             current_hunk = None;
             current_file_from_p4_header = true;
@@ -85,6 +87,7 @@ pub fn parse_unified_diff(patch: &str) -> Vec<PatchFileDiff> {
                     new_path: String::new(),
                     hunks: Vec::new(),
                     status: "modified".to_string(),
+                    is_binary: false,
                 });
                 current_hunk = None;
             }
@@ -129,6 +132,10 @@ pub fn parse_unified_diff(patch: &str) -> Vec<PatchFileDiff> {
             || line.starts_with("\\ No newline at end of file")
         {
             continue;
+        } else if line.starts_with("Binary files ") || line.starts_with("GIT binary patch") {
+            if let Some(ref mut f) = current_file {
+                f.is_binary = true;
+            }
         } else if let Some(ref mut h) = current_hunk {
             if let Some(rest) = line.strip_prefix('+') {
                 h.lines.push(HunkLine {
@@ -199,23 +206,25 @@ fn parse_diff_header_path(raw: &str) -> String {
     trimmed.to_string()
 }
 
-fn parse_p4_section_header(line: &str) -> Option<(String, String)> {
+fn parse_p4_section_header(line: &str) -> Option<(String, String, bool)> {
     let body = line.strip_prefix("==== ")?.strip_suffix(" ====")?.trim();
     if let Some((old_path, new_path)) = body.split_once(" - ") {
-        return Some((
-            parse_p4_section_path(old_path),
-            parse_p4_section_path(new_path),
-        ));
+        let (old_p, old_b) = parse_p4_section_path(old_path);
+        let (new_p, new_b) = parse_p4_section_path(new_path);
+        return Some((old_p, new_p, old_b || new_b));
     }
 
-    let path = parse_p4_section_path(body);
-    Some((path.clone(), path))
+    let (path, is_b) = parse_p4_section_path(body);
+    Some((path.clone(), path, is_b))
 }
 
-fn parse_p4_section_path(raw: &str) -> String {
-    raw.split_once(" (")
-        .map(|(path, _)| path.trim_end().to_string())
-        .unwrap_or_else(|| raw.trim().to_string())
+fn parse_p4_section_path(raw: &str) -> (String, bool) {
+    if let Some((path, type_str)) = raw.split_once(" (") {
+        let is_binary = type_str.contains("binary") || type_str.contains("apple");
+        (path.trim_end().to_string(), is_binary)
+    } else {
+        (raw.trim().to_string(), false)
+    }
 }
 
 fn looks_like_diff_timestamp(value: &str) -> bool {

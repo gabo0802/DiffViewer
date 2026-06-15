@@ -541,8 +541,12 @@ fn append_untracked_git_file_diffs(
             continue;
         }
 
-        let text = io::read_file_text(&abs_path)?;
-        parsed.push(synthetic_git_added_file_diff(&rel_path, &text));
+        if is_file_binary(&abs_path) {
+            parsed.push(synthetic_git_added_binary_diff(&rel_path));
+        } else {
+            let text = io::read_file_text(&abs_path)?;
+            parsed.push(synthetic_git_added_file_diff(&rel_path, &text));
+        }
     }
 
     Ok(())
@@ -578,7 +582,33 @@ fn synthetic_git_added_file_diff(rel_path: &str, text: &str) -> PatchFileDiff {
         new_path: rel_path.to_string(),
         hunks: twoway::compute_hunks("", text),
         status: "added".to_string(),
+        is_binary: false,
     }
+}
+
+
+fn synthetic_git_added_binary_diff(rel_path: &str) -> PatchFileDiff {
+    PatchFileDiff {
+        old_path: "/dev/null".to_string(),
+        new_path: rel_path.to_string(),
+        hunks: Vec::new(),
+        status: "added".to_string(),
+        is_binary: true,
+    }
+}
+
+
+fn is_file_binary(path: &Path) -> bool {
+    use std::io::Read;
+    let Ok(mut f) = std::fs::File::open(path) else { return false };
+    let mut buffer = [0; 8000];
+    let Ok(n) = f.read(&mut buffer) else { return false };
+    let buf = &buffer[..n];
+
+    if buf.len() >= 2 && ((buf[0] == 0xFF && buf[1] == 0xFE) || (buf[0] == 0xFE && buf[1] == 0xFF)) {
+        return false; // UTF-16 BOM
+    }
+    buf.contains(&0)
 }
 
 

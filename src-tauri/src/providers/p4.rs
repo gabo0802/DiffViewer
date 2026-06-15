@@ -18,6 +18,7 @@ pub struct P4OpenedFile {
     pub action: String,
     pub change: String,
     pub local_path: Option<String>,
+    pub is_binary: bool,
 }
 
 
@@ -443,11 +444,14 @@ fn add_opened_files_without_diffs(
 
 fn pending_no_diff_filediff_payload(file: &P4OpenedFile) -> (String, String, String) {
     let empty_json = ContentSource::virtual_text("").to_json_string();
-    let right_json = file
-        .local_path
-        .as_ref()
-        .map(|path| ContentSource::path(path).to_json_string())
-        .unwrap_or_else(|| empty_json.clone());
+    let right_json = if file.is_binary {
+        empty_json.clone()
+    } else {
+        file.local_path
+            .as_ref()
+            .map(|path| ContentSource::path(path).to_json_string())
+            .unwrap_or_else(|| empty_json.clone())
+    };
 
     match file.action.as_str() {
         "add" | "branch" | "move/add" => ("added".to_string(), empty_json, right_json),
@@ -605,11 +609,13 @@ pub fn parse_p4_opened(output: &str) -> Vec<P4OpenedFile> {
                     .unwrap_or("default")
                     .to_string()
             };
+            let is_binary = right.contains("(binary") || right.contains("(ubinary") || right.contains("(apple");
             Some(P4OpenedFile {
                 depot_path,
                 action,
                 change,
                 local_path: None,
+                is_binary,
             })
         })
         .collect()
@@ -701,6 +707,7 @@ fn synthetic_describe_patch_file(file: &P4DescribeFile, kind: &str, change: &str
         new_path,
         hunks: Vec::new(),
         status: describe_status(&file.action).to_string(),
+        is_binary: false,
     }
 }
 
