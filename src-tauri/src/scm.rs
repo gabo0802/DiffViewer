@@ -78,6 +78,9 @@ pub(crate) fn prefetch_p4_contents(
         WriteTargetMode::P4Pending { cwd, config } => {
             let mut paths = Vec::new();
             for pf in parsed {
+                if pf.hunks.is_empty() {
+                    continue; // skip prefetching for binaries/no-diff files
+                }
                 if pf.old_path.starts_with("//") && pf.old_path != "/dev/null" {
                     paths.push(pf.old_path.clone());
                 }
@@ -87,6 +90,9 @@ pub(crate) fn prefetch_p4_contents(
         WriteTargetMode::P4ReadOnly { cwd, config } => {
             let mut paths = Vec::new();
             for pf in parsed {
+                if pf.hunks.is_empty() {
+                    continue; // skip prefetching for binaries/no-diff files
+                }
                 if pf.old_path.starts_with("//") && pf.old_path != "/dev/null" {
                     paths.push(pf.old_path.clone());
                 }
@@ -294,6 +300,12 @@ fn derive_content_sources(
     display_path: &str,
     cache: &std::collections::HashMap<String, String>,
 ) -> Result<(String, String), String> {
+    if pf.hunks.is_empty() {
+        // skip loading content for files with no text diff (binaries, pure renames)
+        let empty = ContentSource::virtual_text("").to_json_string();
+        return Ok((empty.clone(), empty));
+    }
+
     match mode {
         WriteTargetMode::GitWorkingTree { repo_path } => {
             let old_rel = if pf.old_path != "/dev/null" {
