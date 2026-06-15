@@ -309,6 +309,7 @@ export default function App() {
           refreshToken={sidebarRefreshToken}
           refreshCommandToken={sidebarRefreshCommandToken}
           onDiffsetsLoaded={setAppDiffsets}
+          showToast={showToast}
         />
       </div>
       <div

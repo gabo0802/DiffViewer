@@ -21,6 +21,7 @@ interface Props {
   refreshToken?: number;
   refreshCommandToken?: number;
   onDiffsetsLoaded?: (diffsets: DiffSet[]) => void;
+  showToast?: (type: "error" | "success" | "info", message: string) => void;
 }
 
 type DiffSetMeta = {
@@ -53,6 +54,7 @@ export default function Sidebar({
   refreshToken = 0,
   refreshCommandToken = 0,
   onDiffsetsLoaded,
+  showToast,
 }: Props) {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [settings, setSettings] = useState<WorkspaceSettings>(EMPTY_SETTINGS);
@@ -339,6 +341,7 @@ export default function Sidebar({
                 onToggle={() => toggleDiffset(ds.diffset_id)}
                 onSelectFileDiff={onSelectFileDiff}
                 onRemove={() => removeDiffset(ds.diffset_id)}
+                showToast={showToast}
               />
             ))}
           </section>
@@ -486,6 +489,7 @@ function DiffSetRow({
   onToggle,
   onSelectFileDiff,
   onRemove,
+  showToast,
 }: {
   diffset: DiffSet;
   expanded: boolean;
@@ -493,6 +497,7 @@ function DiffSetRow({
   onToggle: () => void;
   onSelectFileDiff: (fd: FileDiff) => void;
   onRemove: () => void;
+  showToast?: (type: "error" | "success" | "info", message: string) => void;
 }) {
   const meta = parseMeta(diffset.source_meta_json);
   const isP4 = diffset.provider === "p4";
@@ -517,6 +522,12 @@ function DiffSetRow({
       await navigator.clipboard.writeText(valueToCopy);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      if (isP4) {
+        showToast?.("success", `copied CL ${valueToCopy} to clipboard`);
+      } else {
+        const shortHash = valueToCopy.substring(0, 7);
+        showToast?.("success", `copied commit hash ${shortHash} to clipboard`);
+      }
     }
   };
 

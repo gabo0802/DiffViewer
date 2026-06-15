@@ -273,7 +273,7 @@ fn import_p4_describe(
     right_label: &str,
     described_files: &[P4DescribeFile],
 ) -> Result<String, String> {
-    let desc = first_p4_description_line(output);
+    let desc = first_p4_describe_description_line(output);
     let p4_config = load_p4_config(cwd);
     let title = if let Some(line) = desc {
         format!("{} - '{}'", change, line)
@@ -802,6 +802,31 @@ fn first_p4_description_line(output: &str) -> Option<String> {
     None
 }
 
+fn first_p4_describe_description_line(output: &str) -> Option<String> {
+    let mut lines = output.lines();
+    let first_line = lines.next()?;
+    if !first_line.starts_with("Change ") {
+        return None;
+    }
+    for line in lines {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.starts_with("Affected files ...")
+            || trimmed.starts_with("Differences ...")
+            || trimmed.starts_with("Jobs ...")
+            || trimmed == "Files:"
+        {
+            break;
+        }
+        if line.starts_with(' ') || line.starts_with('\t') {
+            return Some(trimmed.to_string());
+        }
+    }
+    None
+}
+
 fn get_p4_pending_change_description(
     change: &str,
     cwd: Option<&str>,
@@ -1030,5 +1055,14 @@ file1 v2 line 1
         );
         assert_eq!(map.get("//depot/file2.txt@=1234").unwrap(), "file2 line 1");
         assert_eq!(map.get("//depot/file1.txt#2").unwrap(), "file1 v2 line 1");
+    }
+
+    #[test]
+    fn test_first_p4_describe_description_line() {
+        let output = "Change 12345 by user@client on 2026/06/15 11:18:48\n\n\tThis is a shelving change description\n\nAffected files ...\n";
+        assert_eq!(
+            first_p4_describe_description_line(output),
+            Some("This is a shelving change description".to_string())
+        );
     }
 }
