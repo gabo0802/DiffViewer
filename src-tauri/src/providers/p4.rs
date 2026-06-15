@@ -875,3 +875,146 @@ pub fn strip_p4_rev(path: &str) -> String {
     }
     path.to_string()
 }
+
+
+fn parse_p4_print_header(line: &str) -> Option<&str> {
+    if !line.starts_with("//") {
+        return None;
+    }
+    let hash_idx = line.find('#')?;
+    let dash_idx = line.find(" - ")?;
+    if dash_idx < hash_idx {
+        return None;
+    }
+    let rev_part = &line[hash_idx + 1..dash_idx];
+    if rev_part != "none" && !rev_part.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    Some(&line[..hash_idx])
+}
+
+
+pub fn get_base_depot_path(path: &str) -> String {
+    let path = path.trim();
+    if path.starts_with("//") {
+        if let Some((before, _)) = path.rsplit_once('#') {
+            return before.to_string();
+        }
+        if let Some((before, _)) = path.rsplit_once('@') {
+            return before.to_string();
+        }
+    }
+    path.to_string()
+}
+
+
+fn parse_batched_p4_print(
+    stdout: &str,
+    requested_paths: &[String],
+) -> HashMap<String, String> {
+    let mut file_contents = HashMap::new();
+    let mut current_idx: Option<usize> = None;
+    let mut used_indices = HashSet::new();
+    let mut current_lines: Vec<String> = Vec::new();
+
+    let mut flush_current = |idx: Option<usize>, lines: &mut Vec<String>| {
+        if let Some(i) = idx {
+            let path = &requested_paths[i];
+            let content = lines.join("\n");
+            file_contents.insert(path.clone(), content);
+            lines.clear();
+        }
+    };
+
+    for line in stdout.lines() {
+        if let Some(candidate_base) = parse_p4_print_header(line) {
+            let mut found_idx = None;
+            for (i, req_path) in requested_paths.iter().enumerate() {
+                if !used_indices.contains(&i) && get_base_depot_path(req_path) == candidate_base {
+                    found_idx = Some(i);
+                    break;
+                }
+            }
+
+            if let Some(idx) = found_idx {
+                flush_current(current_idx, &mut current_lines);
+                current_idx = Some(idx);
+                used_indices.insert(idx);
+                continue;
+            }
+        }
+
+        if current_idx.is_some() {
+            current_lines.push(line.to_string());
+        }
+    }
+
+    flush_current(current_idx, &mut current_lines);
+    file_contents
+}
+
+
+pub fn prefetch_p4_file_contents(
+    paths: &[String],
+    cwd: Option<&str>,
+    p4_config: &P4Config,
+) -> Result<HashMap<String, String>, String> {
+    if paths.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let mut cache = HashMap::new();
+    for chunk in paths.chunks(50) {
+        let mut args = vec!["print".to_string()];
+        args.extend(chunk.iter().cloned());
+        let stdout = run_p4_owned(&args, cwd, p4_config)?;
+        let chunk_cache = parse_batched_p4_print(&stdout, chunk);
+        cache.extend(chunk_cache);
+    }
+
+    Ok(cache)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_p4_print_header() {
+        assert_eq!(parse_p4_print_header("//depot/foo/bar.txt#3 - text"), Some("//depot/foo/bar.txt"));
+        assert_eq!(parse_p4_print_header("//depot/foo/bar.txt#none - text"), Some("//depot/foo/bar.txt"));
+        assert_eq!(parse_p4_print_header("//depot/foo/bar.txt#3 - text+kx"), Some("//depot/foo/bar.txt"));
+        assert_eq!(parse_p4_print_header("//depot/foo/bar.txt#3"), None);
+        assert_eq!(parse_p4_print_header("random comment //depot/foo/bar.txt#3 - text"), None);
+    }
+
+    #[test]
+    fn test_get_base_depot_path() {
+        assert_eq!(get_base_depot_path("//depot/foo/bar.txt#3"), "//depot/foo/bar.txt");
+        assert_eq!(get_base_depot_path("//depot/foo/bar.txt@=12345"), "//depot/foo/bar.txt");
+        assert_eq!(get_base_depot_path("//depot/foo/bar.txt"), "//depot/foo/bar.txt");
+    }
+
+    #[test]
+    fn test_parse_batched_p4_print() {
+        let stdout = "\
+//depot/file1.txt#1 - text
+file1 line 1
+file1 line 2
+//depot/file2.txt#3 - text
+file2 line 1
+//depot/file1.txt#2 - text
+file1 v2 line 1
+";
+        let requested = vec![
+            "//depot/file1.txt#1".to_string(),
+            "//depot/file2.txt@=1234".to_string(),
+            "//depot/file1.txt#2".to_string(),
+        ];
+        let map = parse_batched_p4_print(stdout, &requested);
+        assert_eq!(map.get("//depot/file1.txt#1").unwrap(), "file1 line 1\nfile1 line 2");
+        assert_eq!(map.get("//depot/file2.txt@=1234").unwrap(), "file2 line 1");
+        assert_eq!(map.get("//depot/file1.txt#2").unwrap(), "file1 v2 line 1");
+    }
+}

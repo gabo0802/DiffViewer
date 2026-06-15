@@ -70,6 +70,37 @@ pub(crate) enum WriteTargetMode {
     },
 }
 
+pub(crate) fn prefetch_p4_contents(
+    mode: &WriteTargetMode,
+    parsed: &[PatchFileDiff],
+) -> Result<std::collections::HashMap<String, String>, String> {
+    match mode {
+        WriteTargetMode::P4Pending { cwd, config } => {
+            let mut paths = Vec::new();
+            for pf in parsed {
+                if pf.old_path.starts_with("//") && pf.old_path != "/dev/null" {
+                    paths.push(pf.old_path.clone());
+                }
+            }
+            prefetch_p4_file_contents(&paths, cwd.as_deref(), config)
+        }
+        WriteTargetMode::P4ReadOnly { cwd, config } => {
+            let mut paths = Vec::new();
+            for pf in parsed {
+                if pf.old_path.starts_with("//") && pf.old_path != "/dev/null" {
+                    paths.push(pf.old_path.clone());
+                }
+                if pf.new_path.starts_with("//") && pf.new_path != "/dev/null" {
+                    paths.push(pf.new_path.clone());
+                }
+            }
+            prefetch_p4_file_contents(&paths, cwd.as_deref(), config)
+        }
+        _ => Ok(std::collections::HashMap::new()),
+    }
+}
+
+
 pub(crate) fn import_unified_diff_text(
     conn: &rusqlite::Connection,
     workspace_id: &str,
@@ -115,6 +146,8 @@ pub(crate) fn import_parsed_diff_text(
         },
     )?;
 
+    let p4_cache = prefetch_p4_contents(&descriptor.write_target_mode, parsed)?;
+
     for pf in parsed {
         insert_patch_file_diff(
             &tx,
@@ -125,6 +158,7 @@ pub(crate) fn import_parsed_diff_text(
             &descriptor.write_target_mode,
             action_by_path,
             now,
+            &p4_cache,
         )?;
     }
 
@@ -183,6 +217,8 @@ pub(crate) fn replace_parsed_diffset_contents(
     store::update_diffset(&tx, &updated)?;
     store::delete_filediffs_for_diffset(&tx, &diffset.diffset_id)?;
 
+    let p4_cache = prefetch_p4_contents(&write_target_mode, parsed)?;
+
     for pf in parsed {
         insert_patch_file_diff(
             &tx,
@@ -193,6 +229,7 @@ pub(crate) fn replace_parsed_diffset_contents(
             &write_target_mode,
             action_by_path,
             chrono::Utc::now().timestamp(),
+            &p4_cache,
         )?;
     }
 
@@ -209,6 +246,7 @@ fn insert_patch_file_diff(
     write_target_mode: &WriteTargetMode,
     action_by_path: Option<&std::collections::HashMap<String, String>>,
     now: i64,
+    cache: &std::collections::HashMap<String, String>,
 ) -> Result<(), String> {
     let hunks_json = serde_json::to_string(&pf.hunks).unwrap_or_else(|_| "[]".to_string());
     let display_path = display_path_for_patch(pf);
@@ -217,7 +255,7 @@ fn insert_patch_file_diff(
         .unwrap_or_else(|| pf.status.clone());
     let write_target = derive_write_target(write_target_mode, pf, &display_path);
     let (content_left_json, content_right_json) =
-        derive_content_sources(write_target_mode, pf, &display_path)?;
+        derive_content_sources(write_target_mode, pf, &display_path, cache)?;
     DebugLogger::new("scm").log_diff_line_counts(
         &display_path,
         &content_left_json,
@@ -254,6 +292,7 @@ fn derive_content_sources(
     mode: &WriteTargetMode,
     pf: &PatchFileDiff,
     display_path: &str,
+    cache: &std::collections::HashMap<String, String>,
 ) -> Result<(String, String), String> {
     match mode {
         WriteTargetMode::GitWorkingTree { repo_path } => {
@@ -308,8 +347,12 @@ fn derive_content_sources(
             let left_json = if pf.old_path == "/dev/null" {
                 ContentSource::virtual_text("").to_json_string()
             } else if pf.old_path.starts_with("//") {
-                ContentSource::virtual_text(p4_print_file(&pf.old_path, cwd.as_deref(), config)?)
-                    .to_json_string()
+                let text = if let Some(content) = cache.get(&pf.old_path) {
+                    content.clone()
+                } else {
+                    p4_print_file(&pf.old_path, cwd.as_deref(), config)?
+                };
+                ContentSource::virtual_text(text).to_json_string()
             } else {
                 ContentSource::virtual_text(reconstruct_old_text(pf)).to_json_string()
             };
@@ -328,14 +371,22 @@ fn derive_content_sources(
             let left_text = if pf.old_path == "/dev/null" {
                 String::new()
             } else if pf.old_path.starts_with("//") {
-                p4_print_file(&pf.old_path, cwd.as_deref(), config)?
+                if let Some(content) = cache.get(&pf.old_path) {
+                    content.clone()
+                } else {
+                    p4_print_file(&pf.old_path, cwd.as_deref(), config)?
+                }
             } else {
                 reconstruct_old_text(pf)
             };
             let right_text = if pf.new_path == "/dev/null" {
                 String::new()
             } else if pf.new_path.starts_with("//") {
-                p4_print_file(&pf.new_path, cwd.as_deref(), config)?
+                if let Some(content) = cache.get(&pf.new_path) {
+                    content.clone()
+                } else {
+                    p4_print_file(&pf.new_path, cwd.as_deref(), config)?
+                }
             } else {
                 reconstruct_new_text(pf)
             };
