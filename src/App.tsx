@@ -13,7 +13,7 @@ import { useDiffMergeScrollSync } from "./hooks/useDiffMergeScrollSync";
 import { useDiffTabs } from "./hooks/useDiffTabs";
 import { usePersistentState } from "./hooks/usePersistentState";
 import { useResizablePane } from "./hooks/useResizablePane";
-import type { FileDiff, RenderedDiffModel } from "./types";
+import type { DiffSet, FileDiff, RenderedDiffModel } from "./types";
 import "./components/Workspace.css";
 import "./components/Tabs.css";
 

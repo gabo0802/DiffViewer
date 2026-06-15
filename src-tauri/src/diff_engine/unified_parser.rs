@@ -382,10 +382,7 @@ Differences ...
 ";
         let files = parse_unified_diff(patch);
         assert_eq!(files.len(), 1);
-        assert_eq!(
-            files[0].old_path,
-            "//depot/projects/my-app/src/config.env"
-        );
+        assert_eq!(files[0].old_path, "//depot/projects/my-app/src/config.env");
         assert_eq!(
             files[0].new_path,
             "E:\\OnlineBranches\\my-project\\src\\config.env"

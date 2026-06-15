@@ -273,7 +273,8 @@
   align-items: stretch;
 }
 
-.sidebar-diffset-close {
+.sidebar-diffset-close,
+.sidebar-diffset-copy {
   flex: 0 0 auto;
   width: 28px;
   border: none;
@@ -285,12 +286,14 @@
   align-items: center;
   justify-content: center;
 }
-.sidebar-diffset-close:hover {
+.sidebar-diffset-close:hover,
+.sidebar-diffset-copy:hover {
   color: var(--text);
   background: var(--hover-bg);
 }
 
-.sidebar-diffset-close svg {
+.sidebar-diffset-close svg,
+.sidebar-diffset-copy svg {
   width: 14px;
   height: 14px;
 }

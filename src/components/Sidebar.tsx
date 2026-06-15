@@ -11,7 +11,7 @@ import type {
 } from "../types";
 import AddDiffDialog, { type AddDiffRequest } from "./AddDiffDialog";
 import FormDialog from "./FormDialog";
-import { CloseIcon, LoadingIcon, PlusIcon, SettingsIcon, PopIcon } from "./Icons";
+import { CloseIcon, LoadingIcon, PlusIcon, SettingsIcon, PopIcon, CopyIcon } from "./Icons";
 import "./Sidebar.css";
 
 interface Props {
@@ -506,6 +506,20 @@ function DiffSetRow({
     [filediffs]
   );
 
+  const [copied, setCopied] = useState(false);
+  const isGitCommit = diffset.provider === "git" && diffset.kind === "gitCommit";
+  const valueToCopy = isP4 ? meta.change : (isGitCommit ? meta.rev : undefined);
+
+  const handleCopy = async (event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (valueToCopy) {
+      // ponytail: standard browser clipboard API
+      await navigator.clipboard.writeText(valueToCopy);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   return (
     <div className="sidebar-diffset">
       <div className="sidebar-diffset-row">
@@ -518,6 +532,16 @@ function DiffSetRow({
             {statusLabel(diffset, meta)}
           </span>
         </button>
+        {valueToCopy && (
+          <button
+            type="button"
+            className="sidebar-diffset-copy"
+            title={copied ? "Copied!" : (isP4 ? "Copy Changelist" : "Copy Commit Hash")}
+            onClick={handleCopy}
+          >
+            <CopyIcon />
+          </button>
+        )}
         <button
           type="button"
           className="sidebar-diffset-close"

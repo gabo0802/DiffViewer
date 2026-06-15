@@ -1,12 +1,9 @@
 use crate::{app_state::AppState, open_request::OpenRequest, workspace_controller};
 
-pub fn handle_open_request(
-    app_state: &AppState,
-    request: OpenRequest,
-) -> Result<String, String> {
+pub fn handle_open_request(app_state: &AppState, request: OpenRequest) -> Result<String, String> {
     let mut conn = app_state.db.lock().map_err(|e| e.to_string())?;
     let workspace_id = app_state.current_workspace_id()?;
-    
+
     match request {
         OpenRequest::OpenPatch { path } => {
             workspace_controller::import_patch(&conn, &workspace_id, &path)
@@ -107,12 +104,12 @@ mod tests {
     fn test_execute_two_way_grouping() {
         let app_state = setup_test_app_state();
         let dir = tempdir().unwrap();
-        
+
         let file1 = dir.path().join("a.txt");
         let file2 = dir.path().join("b.txt");
         let file3 = dir.path().join("c.txt");
         let file4 = dir.path().join("d.txt");
-        
+
         fs::write(&file1, "A").unwrap();
         fs::write(&file2, "B").unwrap();
         fs::write(&file3, "C").unwrap();
@@ -128,7 +125,8 @@ mod tests {
             file1.to_str().unwrap(),
             file2.to_str().unwrap(),
             None,
-        ).unwrap();
+        )
+        .unwrap();
 
         let diffset_id_2 = execute_two_way_with_grouping(
             &app_state,
@@ -137,9 +135,13 @@ mod tests {
             file3.to_str().unwrap(),
             file4.to_str().unwrap(),
             None,
-        ).unwrap();
+        )
+        .unwrap();
 
-        assert_eq!(diffset_id_1, diffset_id_2, "Files opened quickly should group into the same DiffSet");
+        assert_eq!(
+            diffset_id_1, diffset_id_2,
+            "Files opened quickly should group into the same DiffSet"
+        );
 
         // Verify read-only status
         let diffsets = store::list_diffsets(&conn, &workspace_id).unwrap();
@@ -155,7 +157,8 @@ mod tests {
         conn.execute(
             "UPDATE diffsets SET created_at = created_at - 10 WHERE diffset_id = ?1",
             rusqlite::params![diffset_id_1],
-        ).unwrap();
+        )
+        .unwrap();
 
         let file5 = dir.path().join("e.txt");
         let file6 = dir.path().join("f.txt");
@@ -169,10 +172,14 @@ mod tests {
             file5.to_str().unwrap(),
             file6.to_str().unwrap(),
             None,
-        ).unwrap();
+        )
+        .unwrap();
 
-        assert_ne!(diffset_id_1, diffset_id_3, "After 5 seconds, a new diffset should be created");
-        
+        assert_ne!(
+            diffset_id_1, diffset_id_3,
+            "After 5 seconds, a new diffset should be created"
+        );
+
         let diffsets_after = store::list_diffsets(&conn, &workspace_id).unwrap();
         assert_eq!(diffsets_after.len(), 2);
     }

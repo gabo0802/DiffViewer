@@ -1,16 +1,18 @@
+use crate::content_source::{ContentSource, WriteTarget};
+use crate::debugging::DebugLogger;
+use crate::diff_engine::unified_parser::{self, PatchFileDiff};
+use crate::providers::{ImportTarget, ScmProvider};
+use crate::scm::p4_config::{load_p4_config, P4Config};
+use crate::scm::process::{run_p4, run_p4_owned};
+use crate::scm::{
+    display_path_for_patch, import_parsed_diff_text, import_unified_diff_text,
+    replace_diffset_contents, DiffSetDescriptor, WriteTargetMode,
+};
+use crate::store::{self, DiffSet, FileDiff};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use crate::scm::{import_unified_diff_text, replace_diffset_contents, import_parsed_diff_text, DiffSetDescriptor, WriteTargetMode, display_path_for_patch};
-use crate::scm::p4_config::{load_p4_config, P4Config};
-use crate::scm::process::{run_p4, run_p4_owned};
-use crate::diff_engine::unified_parser::{self, PatchFileDiff};
-use crate::debugging::DebugLogger;
-use crate::store::{self, DiffSet, FileDiff};
-use crate::content_source::{ContentSource, WriteTarget};
-use crate::providers::{ScmProvider, ImportTarget};
-
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct P4OpenedFile {
@@ -21,14 +23,12 @@ pub struct P4OpenedFile {
     pub is_binary: bool,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct P4DescribeFile {
     depot_path: String,
     rev: Option<u32>,
     action: String,
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -47,7 +47,12 @@ impl ScmProvider for P4Provider {
         "p4"
     }
 
-    fn import_target(&self, conn: &Connection, workspace_id: &str, target: &ImportTarget) -> Result<String, String> {
+    fn import_target(
+        &self,
+        conn: &Connection,
+        workspace_id: &str,
+        target: &ImportTarget,
+    ) -> Result<String, String> {
         match target {
             ImportTarget::P4Pending { change, cwd } => {
                 import_p4_pending(conn, workspace_id, change, cwd.as_deref())
@@ -62,12 +67,20 @@ impl ScmProvider for P4Provider {
         }
     }
 
-    fn replace_target(&self, conn: &Connection, diffset: &DiffSet, target: &ImportTarget) -> Result<(), String> {
+    fn replace_target(
+        &self,
+        conn: &Connection,
+        diffset: &DiffSet,
+        target: &ImportTarget,
+    ) -> Result<(), String> {
         match target {
             ImportTarget::P4Pending { change, cwd } => {
                 replace_p4_pending(conn, diffset, change, cwd.as_deref())
             }
-            _ => Err(format!("Unsupported replace target for P4Provider: {:?}", target)),
+            _ => Err(format!(
+                "Unsupported replace target for P4Provider: {:?}",
+                target
+            )),
         }
     }
 }
@@ -106,7 +119,6 @@ pub fn list_p4_pending_changes(cwd: Option<&str>) -> Result<Vec<P4PendingChangeS
 
     Ok(changes)
 }
-
 
 pub fn import_p4_pending(
     conn: &Connection,
@@ -176,7 +188,6 @@ pub fn import_p4_pending(
     })
 }
 
-
 pub fn import_p4_shelved(
     conn: &Connection,
     workspace_id: &str,
@@ -213,7 +224,6 @@ pub fn import_p4_shelved(
     )
 }
 
-
 pub fn import_p4_submitted(
     conn: &Connection,
     workspace_id: &str,
@@ -249,7 +259,6 @@ pub fn import_p4_submitted(
         &described_files,
     )
 }
-
 
 fn import_p4_describe(
     conn: &Connection,
@@ -302,7 +311,6 @@ fn import_p4_describe(
         Some(&describe_action_map(described_files)),
     )
 }
-
 
 pub fn replace_p4_pending(
     conn: &Connection,
@@ -370,7 +378,6 @@ pub fn replace_p4_pending(
     Ok(())
 }
 
-
 pub fn pending_local_path(pf: &PatchFileDiff, cwd: Option<&str>) -> Option<String> {
     if pf.new_path != "/dev/null" {
         let path = Path::new(&pf.new_path);
@@ -391,7 +398,6 @@ pub fn pending_local_path(pf: &PatchFileDiff, cwd: Option<&str>) -> Option<Strin
 
     None
 }
-
 
 fn add_opened_files_without_diffs(
     conn: &Connection,
@@ -441,7 +447,6 @@ fn add_opened_files_without_diffs(
     Ok(())
 }
 
-
 fn pending_no_diff_filediff_payload(file: &P4OpenedFile) -> (String, String, String) {
     let empty_json = ContentSource::virtual_text("").to_json_string();
     let right_json = if file.is_binary {
@@ -463,7 +468,6 @@ fn pending_no_diff_filediff_payload(file: &P4OpenedFile) -> (String, String, Str
     }
 }
 
-
 fn populate_p4_local_paths(
     opened_files: &mut [P4OpenedFile],
     cwd: Option<&str>,
@@ -483,7 +487,6 @@ fn populate_p4_local_paths(
     }
     Ok(())
 }
-
 
 fn resolve_p4_local_paths(
     depot_paths: &[String],
@@ -511,7 +514,6 @@ fn resolve_p4_local_paths(
 
     Ok(mapping)
 }
-
 
 fn collect_pending_p4_diff(
     opened_files: &[P4OpenedFile],
@@ -542,7 +544,6 @@ fn collect_pending_p4_diff(
     }
     Ok(sections.join("\n"))
 }
-
 
 pub fn track_generated_p4_backup(backup_path: &Path, cwd: Option<&str>) -> Result<(), String> {
     let backup = backup_path.to_string_lossy().into_owned();
@@ -578,15 +579,17 @@ pub fn track_generated_p4_backup(backup_path: &Path, cwd: Option<&str>) -> Resul
     }
 }
 
-
-pub fn p4_print_file(path: &str, cwd: Option<&str>, p4_config: &P4Config) -> Result<String, String> {
+pub fn p4_print_file(
+    path: &str,
+    cwd: Option<&str>,
+    p4_config: &P4Config,
+) -> Result<String, String> {
     run_p4_owned(
         &["print".to_string(), "-q".to_string(), path.to_string()],
         cwd,
         p4_config,
     )
 }
-
 
 pub fn parse_p4_opened(output: &str) -> Vec<P4OpenedFile> {
     output
@@ -609,7 +612,8 @@ pub fn parse_p4_opened(output: &str) -> Vec<P4OpenedFile> {
                     .unwrap_or("default")
                     .to_string()
             };
-            let is_binary = right.contains("(binary") || right.contains("(ubinary") || right.contains("(apple");
+            let is_binary =
+                right.contains("(binary") || right.contains("(ubinary") || right.contains("(apple");
             Some(P4OpenedFile {
                 depot_path,
                 action,
@@ -620,8 +624,6 @@ pub fn parse_p4_opened(output: &str) -> Vec<P4OpenedFile> {
         })
         .collect()
 }
-
-
 
 fn parse_p4_describe_files(output: &str) -> Vec<P4DescribeFile> {
     let mut files = Vec::new();
@@ -647,14 +649,12 @@ fn parse_p4_describe_files(output: &str) -> Vec<P4DescribeFile> {
     files
 }
 
-
 fn describe_action_map(files: &[P4DescribeFile]) -> HashMap<String, String> {
     files
         .iter()
         .map(|file| (file.depot_path.clone(), file.action.clone()))
         .collect()
 }
-
 
 fn split_p4_path_rev(path: &str) -> (String, Option<u32>) {
     if let Some((before, after)) = path.rsplit_once('#') {
@@ -664,7 +664,6 @@ fn split_p4_path_rev(path: &str) -> (String, Option<u32>) {
     }
     (path.to_string(), None)
 }
-
 
 fn normalize_p4_describe_files(
     parsed: Vec<PatchFileDiff>,
@@ -699,7 +698,6 @@ fn normalize_p4_describe_files(
     normalized
 }
 
-
 fn synthetic_describe_patch_file(file: &P4DescribeFile, kind: &str, change: &str) -> PatchFileDiff {
     let (old_path, new_path) = describe_content_paths(file, kind, change);
     PatchFileDiff {
@@ -711,7 +709,6 @@ fn synthetic_describe_patch_file(file: &P4DescribeFile, kind: &str, change: &str
     }
 }
 
-
 fn apply_describe_revision_info(
     pf: &mut PatchFileDiff,
     file: &P4DescribeFile,
@@ -722,7 +719,6 @@ fn apply_describe_revision_info(
     pf.old_path = old_path;
     pf.new_path = new_path;
 }
-
 
 fn describe_content_paths(file: &P4DescribeFile, kind: &str, change: &str) -> (String, String) {
     match kind {
@@ -757,18 +753,15 @@ fn describe_content_paths(file: &P4DescribeFile, kind: &str, change: &str) -> (S
     }
 }
 
-
 fn file_with_rev(file: &P4DescribeFile) -> Option<String> {
     file.rev.map(|rev| format!("{}#{}", file.depot_path, rev))
 }
-
 
 fn previous_rev_path(file: &P4DescribeFile) -> Option<String> {
     file.rev
         .and_then(|rev| rev.checked_sub(1))
         .map(|rev| format!("{}#{}", file.depot_path, rev))
 }
-
 
 fn describe_status(action: &str) -> &str {
     match action {
@@ -777,7 +770,6 @@ fn describe_status(action: &str) -> &str {
         _ => "modified",
     }
 }
-
 
 fn describe_display_path(pf: &PatchFileDiff) -> String {
     if pf.old_path.starts_with("//") {
@@ -788,7 +780,6 @@ fn describe_display_path(pf: &PatchFileDiff) -> String {
         display_path_for_patch(pf)
     }
 }
-
 
 fn first_p4_description_line(output: &str) -> Option<String> {
     let mut in_desc = false;
@@ -811,12 +802,14 @@ fn first_p4_description_line(output: &str) -> Option<String> {
     None
 }
 
-
-fn get_p4_pending_change_description(change: &str, cwd: Option<&str>, p4_config: &P4Config) -> Option<String> {
+fn get_p4_pending_change_description(
+    change: &str,
+    cwd: Option<&str>,
+    p4_config: &P4Config,
+) -> Option<String> {
     let output = run_p4(&["change", "-o", change], cwd, p4_config).ok()?;
     first_p4_description_line(&output)
 }
-
 
 fn parse_p4_pending_change_line(raw_line: &str) -> Option<P4PendingChangeSummary> {
     let line = raw_line.trim();
@@ -861,7 +854,6 @@ fn parse_p4_pending_change_line(raw_line: &str) -> Option<P4PendingChangeSummary
     })
 }
 
-
 fn opened_args<'a>(change: &'a str, p4_config: &P4Config) -> Vec<&'a str> {
     if change == "default" || p4_config.client.is_some() {
         vec!["opened", "-c", change]
@@ -869,7 +861,6 @@ fn opened_args<'a>(change: &'a str, p4_config: &P4Config) -> Vec<&'a str> {
         vec!["opened", "-a", "-c", change]
     }
 }
-
 
 pub fn strip_p4_rev(path: &str) -> String {
     let path = path.trim();
@@ -882,7 +873,6 @@ pub fn strip_p4_rev(path: &str) -> String {
     }
     path.to_string()
 }
-
 
 fn parse_p4_print_header(line: &str) -> Option<&str> {
     if !line.starts_with("//") {
@@ -900,7 +890,6 @@ fn parse_p4_print_header(line: &str) -> Option<&str> {
     Some(&line[..hash_idx])
 }
 
-
 pub fn get_base_depot_path(path: &str) -> String {
     let path = path.trim();
     if path.starts_with("//") {
@@ -914,11 +903,7 @@ pub fn get_base_depot_path(path: &str) -> String {
     path.to_string()
 }
 
-
-fn parse_batched_p4_print(
-    stdout: &str,
-    requested_paths: &[String],
-) -> HashMap<String, String> {
+fn parse_batched_p4_print(stdout: &str, requested_paths: &[String]) -> HashMap<String, String> {
     let mut file_contents = HashMap::new();
     let mut current_idx: Option<usize> = None;
     let mut used_indices = HashSet::new();
@@ -960,7 +945,6 @@ fn parse_batched_p4_print(
     file_contents
 }
 
-
 pub fn prefetch_p4_file_contents(
     paths: &[String],
     cwd: Option<&str>,
@@ -982,25 +966,45 @@ pub fn prefetch_p4_file_contents(
     Ok(cache)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_parse_p4_print_header() {
-        assert_eq!(parse_p4_print_header("//depot/foo/bar.txt#3 - text"), Some("//depot/foo/bar.txt"));
-        assert_eq!(parse_p4_print_header("//depot/foo/bar.txt#none - text"), Some("//depot/foo/bar.txt"));
-        assert_eq!(parse_p4_print_header("//depot/foo/bar.txt#3 - text+kx"), Some("//depot/foo/bar.txt"));
+        assert_eq!(
+            parse_p4_print_header("//depot/foo/bar.txt#3 - text"),
+            Some("//depot/foo/bar.txt")
+        );
+        assert_eq!(
+            parse_p4_print_header("//depot/foo/bar.txt#none - text"),
+            Some("//depot/foo/bar.txt")
+        );
+        assert_eq!(
+            parse_p4_print_header("//depot/foo/bar.txt#3 - text+kx"),
+            Some("//depot/foo/bar.txt")
+        );
         assert_eq!(parse_p4_print_header("//depot/foo/bar.txt#3"), None);
-        assert_eq!(parse_p4_print_header("random comment //depot/foo/bar.txt#3 - text"), None);
+        assert_eq!(
+            parse_p4_print_header("random comment //depot/foo/bar.txt#3 - text"),
+            None
+        );
     }
 
     #[test]
     fn test_get_base_depot_path() {
-        assert_eq!(get_base_depot_path("//depot/foo/bar.txt#3"), "//depot/foo/bar.txt");
-        assert_eq!(get_base_depot_path("//depot/foo/bar.txt@=12345"), "//depot/foo/bar.txt");
-        assert_eq!(get_base_depot_path("//depot/foo/bar.txt"), "//depot/foo/bar.txt");
+        assert_eq!(
+            get_base_depot_path("//depot/foo/bar.txt#3"),
+            "//depot/foo/bar.txt"
+        );
+        assert_eq!(
+            get_base_depot_path("//depot/foo/bar.txt@=12345"),
+            "//depot/foo/bar.txt"
+        );
+        assert_eq!(
+            get_base_depot_path("//depot/foo/bar.txt"),
+            "//depot/foo/bar.txt"
+        );
     }
 
     #[test]
@@ -1020,7 +1024,10 @@ file1 v2 line 1
             "//depot/file1.txt#2".to_string(),
         ];
         let map = parse_batched_p4_print(stdout, &requested);
-        assert_eq!(map.get("//depot/file1.txt#1").unwrap(), "file1 line 1\nfile1 line 2");
+        assert_eq!(
+            map.get("//depot/file1.txt#1").unwrap(),
+            "file1 line 1\nfile1 line 2"
+        );
         assert_eq!(map.get("//depot/file2.txt@=1234").unwrap(), "file2 line 1");
         assert_eq!(map.get("//depot/file1.txt#2").unwrap(), "file1 v2 line 1");
     }

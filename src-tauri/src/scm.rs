@@ -1,15 +1,14 @@
-
-pub use crate::providers::git::*;
-pub use crate::providers::p4::*;
 use crate::content_source::{ContentSource, WriteTarget};
 use crate::debugging::DebugLogger;
 use crate::diff_engine::unified_parser::{self, PatchFileDiff};
+pub use crate::providers::git::*;
+pub use crate::providers::p4::*;
+use crate::providers::{git::GitProvider, p4::P4Provider, ImportTarget, ScmProvider};
 use crate::store::{self, DiffSet, FileDiff};
-use crate::providers::{ScmProvider, ImportTarget, git::GitProvider, p4::P4Provider};
 
 pub mod p4_config;
-pub mod process;
 pub mod pr_api;
+pub mod process;
 
 use p4_config::P4Config;
 
@@ -24,7 +23,13 @@ pub fn refresh_diffset(conn: &rusqlite::Connection, diffset_id: &str) -> Result<
                 .get("repo_path")
                 .and_then(|value| value.as_str())
                 .ok_or("Missing repo_path for git working tree diffset")?;
-            GitProvider.replace_target(conn, &diffset, &ImportTarget::GitWorkingTree { repo_path: repo_path.to_string() })?;
+            GitProvider.replace_target(
+                conn,
+                &diffset,
+                &ImportTarget::GitWorkingTree {
+                    repo_path: repo_path.to_string(),
+                },
+            )?;
             Ok(true)
         }
         "p4Pending" | "p4PendingDefault" => {
@@ -33,7 +38,14 @@ pub fn refresh_diffset(conn: &rusqlite::Connection, diffset_id: &str) -> Result<
                 .and_then(|value| value.as_str())
                 .ok_or("Missing change for p4 pending diffset")?;
             let cwd = meta.get("cwd").and_then(|value| value.as_str());
-            P4Provider.replace_target(conn, &diffset, &ImportTarget::P4Pending { change: change.to_string(), cwd: cwd.map(|s| s.to_string()) })?;
+            P4Provider.replace_target(
+                conn,
+                &diffset,
+                &ImportTarget::P4Pending {
+                    change: change.to_string(),
+                    cwd: cwd.map(|s| s.to_string()),
+                },
+            )?;
             Ok(true)
         }
         _ => Ok(false),
@@ -105,7 +117,6 @@ pub(crate) fn prefetch_p4_contents(
         _ => Ok(std::collections::HashMap::new()),
     }
 }
-
 
 pub(crate) fn import_unified_diff_text(
     conn: &rusqlite::Connection,
@@ -480,6 +491,7 @@ mod tests {
             new_path: "C:\\work\\a.cpp".to_string(),
             hunks: Vec::new(),
             status: "renamed".to_string(),
+            is_binary: false,
         };
         assert_eq!(display_path_for_patch(&pf), "//depot/main/a.cpp");
     }

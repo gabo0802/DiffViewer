@@ -1,15 +1,20 @@
+use crate::diff_engine::{
+    twoway,
+    unified_parser::{self, PatchFileDiff},
+};
+use crate::io;
+use crate::providers::{ImportTarget, ScmProvider};
+use crate::scm::pr_api;
+use crate::scm::process::run_command;
+use crate::scm::{
+    display_path_for_patch, import_parsed_diff_text, import_unified_diff_text,
+    replace_parsed_diffset_contents, DiffSetDescriptor, WriteTargetMode,
+};
+use crate::store::DiffSet;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::Path;
-use crate::scm::{import_unified_diff_text, display_path_for_patch, import_parsed_diff_text, replace_parsed_diffset_contents, DiffSetDescriptor, WriteTargetMode};
-use crate::scm::process::run_command;
-use crate::scm::pr_api;
-use crate::diff_engine::{twoway, unified_parser::{self, PatchFileDiff}};
-use crate::store::DiffSet;
-use crate::providers::{ScmProvider, ImportTarget};
-use crate::io;
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -34,7 +39,12 @@ impl ScmProvider for GitProvider {
         "git"
     }
 
-    fn import_target(&self, conn: &Connection, workspace_id: &str, target: &ImportTarget) -> Result<String, String> {
+    fn import_target(
+        &self,
+        conn: &Connection,
+        workspace_id: &str,
+        target: &ImportTarget,
+    ) -> Result<String, String> {
         match target {
             ImportTarget::GitWorkingTree { repo_path } => {
                 import_git_working_tree(conn, workspace_id, repo_path)
@@ -42,22 +52,41 @@ impl ScmProvider for GitProvider {
             ImportTarget::GitCommit { repo_path, rev } => {
                 import_git_commit(conn, workspace_id, repo_path, rev)
             }
-            ImportTarget::GitPullRequest { repo_path, pr_id, target_branch, pr_title } => {
-                import_git_pull_request(conn, workspace_id, repo_path, pr_id, target_branch, pr_title.as_deref())
-            }
-            ImportTarget::GitStash { repo_path, stash_id } => {
-                import_git_stash(conn, workspace_id, repo_path, stash_id)
-            }
+            ImportTarget::GitPullRequest {
+                repo_path,
+                pr_id,
+                target_branch,
+                pr_title,
+            } => import_git_pull_request(
+                conn,
+                workspace_id,
+                repo_path,
+                pr_id,
+                target_branch,
+                pr_title.as_deref(),
+            ),
+            ImportTarget::GitStash {
+                repo_path,
+                stash_id,
+            } => import_git_stash(conn, workspace_id, repo_path, stash_id),
             _ => Err(format!("Unsupported target for GitProvider: {:?}", target)),
         }
     }
 
-    fn replace_target(&self, conn: &Connection, diffset: &DiffSet, target: &ImportTarget) -> Result<(), String> {
+    fn replace_target(
+        &self,
+        conn: &Connection,
+        diffset: &DiffSet,
+        target: &ImportTarget,
+    ) -> Result<(), String> {
         match target {
             ImportTarget::GitWorkingTree { repo_path } => {
                 replace_git_working_tree(conn, diffset, repo_path)
             }
-            _ => Err(format!("Unsupported replace target for GitProvider: {:?}", target)),
+            _ => Err(format!(
+                "Unsupported replace target for GitProvider: {:?}",
+                target
+            )),
         }
     }
 }
@@ -91,7 +120,6 @@ pub fn import_git_working_tree(
         None,
     )
 }
-
 
 pub fn import_git_commit(
     conn: &Connection,
@@ -171,15 +199,16 @@ pub fn import_git_stash(
         "git",
         &["-C", repo_path, "log", "-1", "--format=%s", stash_id],
         None,
-    ).unwrap_or_else(|_| stash_id.to_string());
-    
+    )
+    .unwrap_or_else(|_| stash_id.to_string());
+
     let mut display_msg = message.trim().to_string();
     if display_msg.starts_with("On ") {
         display_msg.replace_range(0..3, "on ");
     }
-    
+
     let title = if stash_id.starts_with("stash@{") && stash_id.ends_with("}") {
-        let num = &stash_id[7..stash_id.len()-1];
+        let num = &stash_id[7..stash_id.len() - 1];
         format!("Stash #{} {}", num, display_msg)
     } else {
         format!("{}: {}", stash_id, display_msg)
@@ -211,8 +240,12 @@ pub fn import_git_stash(
 }
 
 pub fn list_git_stashes(repo_path: &str) -> Result<Vec<GitStashSummary>, String> {
-    let output = run_command("git", &["-C", repo_path, "stash", "list", "--format=%gd%x1f%gs"], None)?;
-    
+    let output = run_command(
+        "git",
+        &["-C", repo_path, "stash", "list", "--format=%gd%x1f%gs"],
+        None,
+    )?;
+
     Ok(output
         .lines()
         .filter_map(|line| {
@@ -222,14 +255,14 @@ pub fn list_git_stashes(repo_path: &str) -> Result<Vec<GitStashSummary>, String>
             if stash_id.is_empty() {
                 return None;
             }
-            
+
             let mut display_msg = message.to_string();
             if display_msg.starts_with("On ") {
                 display_msg.replace_range(0..3, "on ");
             }
-            
+
             let formatted_title = if stash_id.starts_with("stash@{") && stash_id.ends_with("}") {
-                let num = &stash_id[7..stash_id.len()-1];
+                let num = &stash_id[7..stash_id.len() - 1];
                 format!("Stash #{} {}", num, display_msg)
             } else {
                 format!("{}: {}", stash_id, display_msg)
@@ -244,40 +277,64 @@ pub fn list_git_stashes(repo_path: &str) -> Result<Vec<GitStashSummary>, String>
 }
 
 pub fn pop_git_stash(repo_path: &str, stash_id: &str) -> Result<(), String> {
-    crate::debugging::DebugLogger::new("scm").log(format!("pop_git_stash repo={} stash_id={}", repo_path, stash_id));
+    crate::debugging::DebugLogger::new("scm").log(format!(
+        "pop_git_stash repo={} stash_id={}",
+        repo_path, stash_id
+    ));
     let mut cmd = std::process::Command::new("git");
     cmd.args(&["-C", repo_path, "stash", "pop", stash_id]);
-    
+
     let output = cmd.output().map_err(|e| e.to_string())?;
     if !output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        if stdout.contains("CONFLICT") || stderr.contains("CONFLICT") || stdout.contains("Merge conflict") {
+        if stdout.contains("CONFLICT")
+            || stderr.contains("CONFLICT")
+            || stdout.contains("Merge conflict")
+        {
             return Err("CONFLICT".to_string());
         }
-        return Err(format!("git stash pop failed: {}\n{}", stderr.trim(), stdout.trim()));
+        return Err(format!(
+            "git stash pop failed: {}\n{}",
+            stderr.trim(),
+            stdout.trim()
+        ));
     }
     Ok(())
 }
 
 pub fn apply_git_stash(repo_path: &str, stash_id: &str) -> Result<(), String> {
-    crate::debugging::DebugLogger::new("scm").log(format!("apply_git_stash repo={} stash_id={}", repo_path, stash_id));
+    crate::debugging::DebugLogger::new("scm").log(format!(
+        "apply_git_stash repo={} stash_id={}",
+        repo_path, stash_id
+    ));
     let mut cmd = std::process::Command::new("git");
     cmd.args(&["-C", repo_path, "stash", "apply", stash_id]);
-    
+
     let output = cmd.output().map_err(|e| e.to_string())?;
     if !output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        if stdout.contains("CONFLICT") || stderr.contains("CONFLICT") || stdout.contains("Merge conflict") {
+        if stdout.contains("CONFLICT")
+            || stderr.contains("CONFLICT")
+            || stdout.contains("Merge conflict")
+        {
             return Err("CONFLICT".to_string());
         }
-        return Err(format!("git stash apply failed: {}\n{}", stderr.trim(), stdout.trim()));
+        return Err(format!(
+            "git stash apply failed: {}\n{}",
+            stderr.trim(),
+            stdout.trim()
+        ));
     }
     Ok(())
 }
 
-pub fn list_git_commits(repo_path: &str, limit: usize, branch: Option<&str>) -> Result<Vec<GitCommitSummary>, String> {
+pub fn list_git_commits(
+    repo_path: &str,
+    limit: usize,
+    branch: Option<&str>,
+) -> Result<Vec<GitCommitSummary>, String> {
     let max_count = limit.max(1).min(100).to_string();
     let mut args = vec![
         "-C",
@@ -314,7 +371,6 @@ pub fn list_git_commits(repo_path: &str, limit: usize, branch: Option<&str>) -> 
         .collect())
 }
 
-
 pub fn list_git_branches(repo_path: &str) -> Result<Vec<String>, String> {
     let output = run_command(
         "git",
@@ -335,12 +391,11 @@ pub fn list_git_branches(repo_path: &str) -> Result<Vec<String>, String> {
         .filter(|line| !line.is_empty())
         .map(str::to_string)
         .collect();
-    
+
     branches.sort();
     branches.dedup();
     Ok(branches)
 }
-
 
 pub fn get_pull_requests(
     conn: &Connection,
@@ -351,15 +406,19 @@ pub fn get_pull_requests(
         "git",
         &["-C", repo_path, "remote", "get-url", "origin"],
         None,
-    ).map(|s| s.trim().to_string())?;
+    )
+    .map(|s| s.trim().to_string())?;
 
     let settings = crate::services::workspace_service::get_settings(conn, workspace_id)?;
     let repo_info = pr_api::parse_remote_url(&remote_url, settings.gitlab_host_url.as_deref())
         .ok_or_else(|| "Could not parse origin remote URL as GitHub or GitLab".to_string())?;
 
-    pr_api::get_pull_requests(&repo_info, settings.github_pat.as_deref(), settings.gitlab_pat.as_deref())
+    pr_api::get_pull_requests(
+        &repo_info,
+        settings.github_pat.as_deref(),
+        settings.gitlab_pat.as_deref(),
+    )
 }
-
 
 pub fn import_git_pull_request(
     conn: &Connection,
@@ -374,8 +433,9 @@ pub fn import_git_pull_request(
         "git",
         &["-C", repo_path, "remote", "get-url", "origin"],
         None,
-    ).map(|s| s.trim().to_string())?;
-    
+    )
+    .map(|s| s.trim().to_string())?;
+
     let settings = crate::services::workspace_service::get_settings(conn, workspace_id)?;
     let repo_info = pr_api::parse_remote_url(&remote_url, settings.gitlab_host_url.as_deref())
         .ok_or_else(|| "Could not parse origin remote URL".to_string())?;
@@ -385,7 +445,7 @@ pub fn import_git_pull_request(
         pr_api::RepoHost::GitHub => format!("pull/{}/head", pr_id),
         pr_api::RepoHost::GitLab(_) => format!("merge-requests/{}/head", pr_id),
     };
-    
+
     run_command(
         "git",
         &["-C", repo_path, "fetch", "origin", &fetch_ref],
@@ -411,13 +471,13 @@ pub fn import_git_pull_request(
         pr_api::RepoHost::GitHub => ("PR", "PR"),
         pr_api::RepoHost::GitLab(_) => ("MR", "MR"),
     };
-    
+
     let title = if let Some(t) = pr_title {
         format!("{} #{}: {}", title_prefix, pr_id, t)
     } else {
         format!("{} #{}", title_prefix, pr_id)
     };
-    
+
     import_unified_diff_text(
         conn,
         workspace_id,
@@ -444,7 +504,6 @@ pub fn import_git_pull_request(
         None,
     )
 }
-
 
 pub fn replace_git_working_tree(
     conn: &Connection,
@@ -476,13 +535,11 @@ pub fn replace_git_working_tree(
     )
 }
 
-
 fn load_git_working_tree_file_diffs(repo_path: &str) -> Result<Vec<PatchFileDiff>, String> {
     let mut parsed = unified_parser::parse_unified_diff(&git_working_tree_diff_text(repo_path)?);
     append_untracked_git_file_diffs(&mut parsed, repo_path)?;
     Ok(parsed)
 }
-
 
 fn git_working_tree_diff_text(repo_path: &str) -> Result<String, String> {
     if git_ref_exists(repo_path, "HEAD") {
@@ -516,11 +573,14 @@ fn git_working_tree_diff_text(repo_path: &str) -> Result<String, String> {
     }
 }
 
-
 fn git_ref_exists(repo_path: &str, rev: &str) -> bool {
-    run_command("git", &["-C", repo_path, "rev-parse", "--verify", rev], None).is_ok()
+    run_command(
+        "git",
+        &["-C", repo_path, "rev-parse", "--verify", rev],
+        None,
+    )
+    .is_ok()
 }
-
 
 fn append_untracked_git_file_diffs(
     parsed: &mut Vec<PatchFileDiff>,
@@ -552,7 +612,6 @@ fn append_untracked_git_file_diffs(
     Ok(())
 }
 
-
 fn list_untracked_git_paths(repo_path: &str) -> Result<Vec<String>, String> {
     let output = run_command(
         "git",
@@ -575,7 +634,6 @@ fn list_untracked_git_paths(repo_path: &str) -> Result<Vec<String>, String> {
         .collect())
 }
 
-
 fn synthetic_git_added_file_diff(rel_path: &str, text: &str) -> PatchFileDiff {
     PatchFileDiff {
         old_path: "/dev/null".to_string(),
@@ -585,7 +643,6 @@ fn synthetic_git_added_file_diff(rel_path: &str, text: &str) -> PatchFileDiff {
         is_binary: false,
     }
 }
-
 
 fn synthetic_git_added_binary_diff(rel_path: &str) -> PatchFileDiff {
     PatchFileDiff {
@@ -597,25 +654,27 @@ fn synthetic_git_added_binary_diff(rel_path: &str) -> PatchFileDiff {
     }
 }
 
-
 fn is_file_binary(path: &Path) -> bool {
     use std::io::Read;
-    let Ok(mut f) = std::fs::File::open(path) else { return false };
+    let Ok(mut f) = std::fs::File::open(path) else {
+        return false;
+    };
     let mut buffer = [0; 8000];
-    let Ok(n) = f.read(&mut buffer) else { return false };
+    let Ok(n) = f.read(&mut buffer) else {
+        return false;
+    };
     let buf = &buffer[..n];
 
-    if buf.len() >= 2 && ((buf[0] == 0xFF && buf[1] == 0xFE) || (buf[0] == 0xFE && buf[1] == 0xFF)) {
+    if buf.len() >= 2 && ((buf[0] == 0xFF && buf[1] == 0xFE) || (buf[0] == 0xFE && buf[1] == 0xFF))
+    {
         return false; // UTF-16 BOM
     }
     buf.contains(&0)
 }
 
-
 pub fn git_show_file(repo_path: &str, rel_path: &str) -> Result<String, String> {
     git_show_file_at_rev(repo_path, "HEAD", rel_path)
 }
-
 
 pub fn git_show_file_at_rev(repo_path: &str, rev: &str, rel_path: &str) -> Result<String, String> {
     run_command(
@@ -625,7 +684,6 @@ pub fn git_show_file_at_rev(repo_path: &str, rev: &str, rel_path: &str) -> Resul
     )
 }
 
-
 fn display_repo_name(repo_path: &str) -> String {
     Path::new(repo_path)
         .file_name()
@@ -633,7 +691,6 @@ fn display_repo_name(repo_path: &str) -> String {
         .filter(|name| !name.is_empty())
         .unwrap_or_else(|| repo_path.to_string())
 }
-
 
 fn short_rev(rev: &str) -> String {
     rev.chars().take(12).collect()

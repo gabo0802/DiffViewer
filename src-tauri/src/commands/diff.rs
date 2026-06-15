@@ -1,8 +1,12 @@
 use tauri::State;
 
 use crate::{
-    app_state::AppState, diff_engine::render::RenderedDiffModel, scm, services::render_service,
-    store, workspace_controller, providers::{ScmProvider, ImportTarget, git::GitProvider, p4::P4Provider},
+    app_state::AppState,
+    diff_engine::render::RenderedDiffModel,
+    providers::{git::GitProvider, p4::P4Provider, ImportTarget, ScmProvider},
+    scm,
+    services::render_service,
+    store, workspace_controller,
 };
 
 #[tauri::command]
@@ -20,7 +24,14 @@ pub fn compare_two_files(
 ) -> Result<String, String> {
     let mut conn = state.db.lock().map_err(|err| err.to_string())?;
     let workspace_id = state.current_workspace_id()?;
-    workspace_controller::compare_two_files(&mut *conn, &workspace_id, &left_path, &right_path, None, None)
+    workspace_controller::compare_two_files(
+        &mut *conn,
+        &workspace_id,
+        &left_path,
+        &right_path,
+        None,
+        None,
+    )
 }
 
 #[tauri::command]
@@ -116,7 +127,12 @@ pub fn import_git_pull_request(
 ) -> Result<String, String> {
     let conn = state.db.lock().map_err(|err| err.to_string())?;
     let workspace_id = state.current_workspace_id()?;
-    let target = ImportTarget::GitPullRequest { repo_path, pr_id, target_branch, pr_title };
+    let target = ImportTarget::GitPullRequest {
+        repo_path,
+        pr_id,
+        target_branch,
+        pr_title,
+    };
     GitProvider.import_target(&conn, &workspace_id, &target)
 }
 
@@ -207,12 +223,17 @@ pub fn import_git_stash(
 ) -> Result<String, String> {
     let conn = state.db.lock().map_err(|err| err.to_string())?;
     let workspace_id = state.current_workspace_id()?;
-    let target = ImportTarget::GitStash { repo_path, stash_id };
+    let target = ImportTarget::GitStash {
+        repo_path,
+        stash_id,
+    };
     GitProvider.import_target(&conn, &workspace_id, &target)
 }
 
 #[tauri::command]
-pub fn list_git_stashes(repo_path: String) -> Result<Vec<crate::providers::git::GitStashSummary>, String> {
+pub fn list_git_stashes(
+    repo_path: String,
+) -> Result<Vec<crate::providers::git::GitStashSummary>, String> {
     crate::providers::git::list_git_stashes(&repo_path)
 }
 

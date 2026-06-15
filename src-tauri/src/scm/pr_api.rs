@@ -101,7 +101,10 @@ pub fn get_pull_requests(
     }
 }
 
-fn get_github_prs(repo_info: &RepoInfo, pat: Option<&str>) -> Result<Vec<PullRequestSummary>, String> {
+fn get_github_prs(
+    repo_info: &RepoInfo,
+    pat: Option<&str>,
+) -> Result<Vec<PullRequestSummary>, String> {
     let url = format!(
         "https://api.github.com/repos/{}/{}/pulls?state=all&per_page=50",
         repo_info.owner, repo_info.repo
@@ -117,20 +120,22 @@ fn get_github_prs(repo_info: &RepoInfo, pat: Option<&str>) -> Result<Vec<PullReq
         }
     }
 
-    let response = request.call().map_err(|e| format!("GitHub API error: {}", e))?;
-    
+    let response = request
+        .call()
+        .map_err(|e| format!("GitHub API error: {}", e))?;
+
     #[derive(Deserialize)]
     struct GithubUser {
         login: String,
     }
-    
+
     #[derive(Deserialize)]
     struct GithubRef {
         ref_name: Option<String>,
         #[serde(rename = "ref")]
         ref_field: Option<String>,
     }
-    
+
     #[derive(Deserialize)]
     struct GithubPR {
         number: u64,
@@ -141,7 +146,10 @@ fn get_github_prs(repo_info: &RepoInfo, pat: Option<&str>) -> Result<Vec<PullReq
         user: GithubUser,
     }
 
-    let text = response.into_body().read_to_string().map_err(|e| format!("Failed to read GitHub response: {}", e))?;
+    let text = response
+        .into_body()
+        .read_to_string()
+        .map_err(|e| format!("Failed to read GitHub response: {}", e))?;
     let prs: Vec<GithubPR> = serde_json::from_str(&text)
         .map_err(|e| format!("Failed to parse GitHub response: {}", e))?;
 
@@ -178,13 +186,15 @@ fn get_gitlab_mrs(
         }
     }
 
-    let response = request.call().map_err(|e| format!("GitLab API error: {}", e))?;
-    
+    let response = request
+        .call()
+        .map_err(|e| format!("GitLab API error: {}", e))?;
+
     #[derive(Deserialize)]
     struct GitlabUser {
         username: String,
     }
-    
+
     #[derive(Deserialize)]
     struct GitlabMR {
         iid: u64,
@@ -195,7 +205,10 @@ fn get_gitlab_mrs(
         author: GitlabUser,
     }
 
-    let text = response.into_body().read_to_string().map_err(|e| format!("Failed to read GitLab response: {}", e))?;
+    let text = response
+        .into_body()
+        .read_to_string()
+        .map_err(|e| format!("Failed to read GitLab response: {}", e))?;
     let mrs: Vec<GitlabMR> = serde_json::from_str(&text)
         .map_err(|e| format!("Failed to parse GitLab response: {}", e))?;
 
